@@ -1,9 +1,9 @@
 #!/bin/bash
 
-export PREFIX=/local/cross
 export TARGET=$1
+export PREFIX=/usr/local/gcc-$TARGET-binaries/
 
-cd /src/build-gcc-$TARGET
+cd ./build-gcc-$TARGET
 export PATH=$PATH:$PREFIX/bin
 
 rm ./gcc/gtype.state
