@@ -2,3 +2,4 @@ build-gcc-hip/
 *.bak
 *.lnk
 *.out
+build-gcc.sh

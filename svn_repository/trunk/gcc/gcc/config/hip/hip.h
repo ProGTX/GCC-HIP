@@ -803,17 +803,20 @@ typedef struct
 /* Node: Sections */
 
 /*
-	Start of a text section.
-	This must be a constant string, since it's used in crtstuff.c.
+	A C expression whose value is a string, including spacing, containing the assembler
+	operation that should precede instructions and read-only data. Normally "\t.text"
+	is right.
 */
 #define TEXT_SECTION_ASM_OP \
 	"\t.text"
 
 /*
-	Start of a data section.
+	A C expression whose value is a string, including spacing, containing the assembler
+	operation to identify the following data as writable initialized data. Normally
+	"\t.data" is right.
 	TODO: Remove hip_data_section_asm_op()
 */
-#define SDATA_SECTION_ASM_OP \
+#define DATA_SECTION_ASM_OP \
 	"\t.data"
 
 

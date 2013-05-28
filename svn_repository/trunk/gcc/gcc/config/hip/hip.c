@@ -455,26 +455,41 @@ int hip_const_ok_for_letter_p(HOST_WIDE_INT value, int c)
 	{
 		case 'I':
 			/* A signed 16-bit constant (for arithmetic instructions). */
-			return value >= -2048 && value <= 2047;
+			return value >= -32768 && value <= 32767;
 		case 'J':
 			/* Integer zero. */
 			return value == 0;
 		case 'K':
-			/* An unsigned 16-bit constant (for logic instructions). */
-			return value >= 0 && value <= 4095;
+			/* An unsigned 16-bit constant. */
+			return value >= 0 && value <= 65535;
 		case 'L':
 			/*	A signed 32-bit constant in which the lower 16 bits are zero.
-				Such constants can be loaded using lui. */
+				Such constants can be loaded using lhi.
+				TODO: Check. */
+			return (value & 255) == 0;
+			/*return hip_shiftable_wyde_value(value);*/
+		/*case 'M':
+			TODO: What is this supposed to be?
+			/* A constant that cannot be loaded using lhi, addiu.
+			/*return hip_shiftable_wyde_value(~value);*/
+		case 'N':
+			/* Valid register number. */
+			return value >= 0 && value <= 31;
+		case 'P':
+			/* Temporary. */
 			return hip_shiftable_wyde_value(value);
-		case 'M':
-			/* A constant that cannot be loaded using lui, addiu. */
-			return hip_shiftable_wyde_value(~value);
+		case 'G':
+			/* An unsigned 8-bit constant. */
+			return value >= 0 && value <= 255;
 		default:
 			return 0;
 	}
 }
 
-/* CONST_DOUBLE_OK_FOR_LETTER_P.  */
+/*
+	CONST_DOUBLE_OK_FOR_LETTER_P.
+	TODO: Remove.
+*/
 
 int hip_const_double_ok_for_letter_p(rtx value, int c)
 {
@@ -978,7 +993,10 @@ static void hip_setup_incoming_varargs(CUMULATIVE_ARGS *args_so_farp,
 
 }
 
-/* TARGET_ASM_TRAMPOLINE_TEMPLATE.  */
+/*
+	TODO: Probably not needed.
+	TARGET_ASM_TRAMPOLINE_TEMPLATE.
+*/
 
 static void hip_asm_trampoline_template(FILE *stream)
 {
@@ -1152,7 +1170,7 @@ bool hip_legitimate_address_p(
 			return 1;
 
 		/* (mem (plus (reg) (0..31?))) */
-		if(GET_CODE (x2) == CONST_INT && CONST_OK_FOR_LETTER_P (INTVAL (x2), 'I'))
+		if(GET_CODE (x2) == CONST_INT && CONST_OK_FOR_LETTER_P(INTVAL(x2), 'N'))
 			return 1;
 
 		return 0;
@@ -1318,11 +1336,11 @@ static const char *
 hip_strip_name_encoding(const char *name)
 {
 	HIP_FUNCTION_ENTRY();
-	for (; (*name == '@' || *name == '*'); name++)
+
+	for(; (*name == '@' || *name == '*'); name++)
 		;
 
 	return name;
-
 }
 
 /*
@@ -1334,7 +1352,7 @@ static void hip_file_start(void)
 	HIP_FUNCTION_ENTRY();
 	default_file_start();
 
-	fputs("#Data section\n", asm_out_file);
+	fputs("#\tData section\n", asm_out_file);
 
 	/* Make sure each file starts with the text section.  */
 	switch_to_section(text_section);
@@ -1356,7 +1374,7 @@ static void hip_file_end(void)
 static void hip_asm_output_source_filename(FILE *stream, const char *name)
 {
 	HIP_FUNCTION_ENTRY();
-	fprintf(stream, "# 1 ");
+	fprintf(stream, "#\t");
 	OUTPUT_QUOTED_STRING(stream, name);
 	fprintf(stream, "\n");
 
@@ -1407,59 +1425,60 @@ void hip_output_quoted_string(FILE *stream, const char *string, int length)
 
 }
 
-/* Target hook for assembling integer objects.  Use hip_print_operand
- for WYDE and TETRA.  Use hip_output_octa to output 4-byte
- CONST_DOUBLEs.  */
+/*
+	Target hook for assembling integer objects.  Use hip_print_operand
+	for WYDE and TETRA.  Use hip_output_octa to output 4-byte
+	CONST_DOUBLEs.
+	TODO: Need to change.
+*/
+
+static bool hip_emit_integer(rtx x, char* instruction, char letter, int* aligned_p)
+{
+	if(GET_CODE(x) != CONST_INT)
+	{
+		*aligned_p = 0;
+		return false;
+	}
+
+	fputs(instruction, asm_out_file);
+	hip_print_operand(asm_out_file, x, letter);
+	fputc('\n', asm_out_file);
+
+	return true;
+}
 
 static bool hip_assemble_integer(rtx x, unsigned int size, int aligned_p)
 {
 	HIP_FUNCTION_ENTRY();
+
 	if(aligned_p)
+	{
 		switch (size)
 		{
-		/* We handle a limited number of types of operands in here.  But
-		 that's ok, because we can punt to generic functions.  We then
-		 pretend that aligned data isn't needed, so the usual .<pseudo>
-		 syntax is used (which works for aligned data too).  We actually
-		 *must* do that, since we say we don't have simple aligned
-		 pseudos, causing this function to be called.  We just try and
-		 keep as much compatibility as possible with hipal syntax for
-		 normal cases (i.e. without GNU extensions and C only).  */
-		case 1:
-			if(GET_CODE (x) != CONST_INT)
-			{
-				aligned_p = 0;
+			case 1:
+				if(hip_emit_integer(x, "\t.byte\t", 'B', &aligned_p))
+				{
+					return true;
+				}
 				break;
-			}
-			fputs("\tBYTE\t", asm_out_file);
-			hip_print_operand(asm_out_file, x, 'B');
-			fputc('\n', asm_out_file);
-			return true;
 
-		case 2:
-			if(GET_CODE (x) != CONST_INT)
-			{
-				aligned_p = 0;
+			case 2:
+				if(hip_emit_integer(x, "\t.word16\t", 'H', &aligned_p))
+				{
+					return true;
+				}
 				break;
-			}
-			fputs("\tWYDE\t", asm_out_file);
-			hip_print_operand(asm_out_file, x, 'W');
-			fputc('\n', asm_out_file);
-			return true;
 
-		case 4:
-			if(GET_CODE (x) != CONST_INT)
-			{
-				aligned_p = 0;
+			case 4:
+				if(hip_emit_integer(x, "\t.word\t", 'W', &aligned_p))
+				{
+					return true;
+				}
 				break;
-			}
-			fputs("\tTETRA\t", asm_out_file);
-			hip_print_operand(asm_out_file, x, 'L');
-			fputc('\n', asm_out_file);
-			return true;
 		}
-	return default_assemble_integer(x, size, aligned_p);
+	}
 
+	return default_assemble_integer(x, size, aligned_p);
 }
 
 /*
@@ -1490,13 +1509,18 @@ void hip_asm_output_aligned_common(
 )
 {
 	HIP_FUNCTION_ENTRY();
+
+	fprintf(stream, "\t.align %d\n", align / BITS_PER_UNIT);
+	assemble_name(stream, name);
+	fprintf(stream, "\t.space %d", size);
+
 	/* This is mostly the elfos.h one.  There doesn't seem to be a way to
 	 express this in a hipal-compatible way.  */
-	fprintf(stream, "\t.comm\t");
+	/*fprintf(stream, "\t.comm\t");
 	assemble_name(stream, name);
 	fprintf(
 		stream, ",%u,%u ! hipal-incompatible COMMON\n", size, align / BITS_PER_UNIT
-	);
+	);*/
 
 }
 
@@ -1525,7 +1549,7 @@ void hip_asm_output_label(FILE *stream, const char *name)
 {
 	HIP_FUNCTION_ENTRY();
 	assemble_name(stream, name);
-	fprintf(stream, "\tIS @\n");
+	/*fprintf(stream, "\tIS @\n");*/
 
 }
 
@@ -1537,7 +1561,7 @@ void hip_asm_output_internal_label(FILE *stream, const char *name)
 {
 	HIP_FUNCTION_ENTRY();
 	assemble_name_raw(stream, name);
-	fprintf(stream, "\tIS @\n");
+	/*fprintf(stream, "\tIS @\n");*/
 
 }
 
@@ -1652,9 +1676,9 @@ void hip_print_operand(FILE *stream, rtx x, int code)
 		fprintf (stream, "%d", HIP_POP_ARGUMENT ());
 		return;
 
-		case 'B':
+	case 'B':
 		if(GET_CODE (x) != CONST_INT)
-		fatal_insn ("HIP Internal: Expected a CONST_INT, not this", x);
+			fatal_insn ("HIP Internal: Expected a CONST_INT, not this", x);
 		fprintf (stream, "%d", (int) (INTVAL (x) & 0xff));
 		return;
 
@@ -1662,7 +1686,7 @@ void hip_print_operand(FILE *stream, rtx x, int code)
 		/* Highpart.  Must be general register, and not the last one, as
 		 that one cannot be part of a consecutive register pair.  */
 		if(regno > HIP_LAST_GENERAL_REGISTER - 1)
-		internal_error ("HIP Internal: Bad register: %d", regno);
+			internal_error ("HIP Internal: Bad register: %d", regno);
 
 		/* This is big-endian, so the high-part is the first one.  */
 		fprintf (stream, "%s", reg_names[HIP_OUTPUT_REGNO (regno)]);
@@ -1686,7 +1710,7 @@ void hip_print_operand(FILE *stream, rtx x, int code)
 		}
 
 		if(regno > HIP_LAST_GENERAL_REGISTER - 1)
-		internal_error ("HIP Internal: Bad register: %d", regno);
+			internal_error ("HIP Internal: Bad register: %d", regno);
 
 		/* This is big-endian, so the low-part is + 1.  */
 		fprintf (stream, "%s", reg_names[HIP_OUTPUT_REGNO (regno) + 1]);
@@ -1775,18 +1799,22 @@ void hip_print_operand(FILE *stream, rtx x, int code)
       return;
 
     case 'v':
-      hip_output_shifted_value (stream, (HOST_WIDEST_INT) hip_intval (x));
-      return;
+		hip_output_shifted_value (stream, (HOST_WIDEST_INT) hip_intval (x));
+		return;
 
     case 'V':
-      hip_output_shifted_value (stream, (HOST_WIDEST_INT) ~hip_intval (x));
-      return;
+		hip_output_shifted_value (stream, (HOST_WIDEST_INT) ~hip_intval (x));
+		return;
 
     case 'W':
-      if(GET_CODE (x) != CONST_INT)
-	fatal_insn ("HIP Internal: Expected a CONST_INT, not this", x);
-      fprintf (stream, "#%x", (int) (INTVAL (x) & 0xffff));
-      return;
+		if(GET_CODE(x) != CONST_INT)
+		{
+			fatal_insn("HIP Internal: Expected a CONST_INT, not this", x);
+		}
+		fprintf(stream, "%d\t", (int) INTVAL(x));
+		fprintf(stream, "#%x\t", (int) (INTVAL(x) & 0xffff));
+		fprintf(stream, "#%x", INTVAL(x));
+		return;
 
     case 0:
       /* Nothing to do.  */
@@ -1889,7 +1917,7 @@ void hip_print_operand_address(FILE *stream, rtx x)
 				fprintf (stream, "%s", reg_names[HIP_OUTPUT_REGNO (REGNO (x2))]);
 				return;
 			}
-			else if(GET_CODE (x2) == CONST_INT && CONST_OK_FOR_LETTER_P (INTVAL (x2), 'I'))
+			else if(GET_CODE (x2) == CONST_INT && CONST_OK_FOR_LETTER_P (INTVAL (x2), 'N'))
 			{
 				output_addr_const (stream, x2);
 				return;
@@ -1984,7 +2012,7 @@ void hip_asm_output_skip(FILE *stream, int nbytes)
 
 /*
 	ASM_OUTPUT_ALIGN.
-	TODO: Need to change.
+	TODO: Probably not needed.
 */
 void hip_asm_output_align(FILE *stream, int power)
 {
@@ -1995,8 +2023,8 @@ void hip_asm_output_align(FILE *stream, int power)
 	 argument is in number of bytes or the log2 thereof.  We do it in
 	 addition to the LOC directive, so nothing needs tweaking when
 	 copy-pasting assembly into hipal.  */
-	fprintf(stream, "\t.p2align %d\n", power);
-	fprintf(stream, "\tLOC @+(%d-@)&%d\n", 1 << power, (1 << power) - 1);
+	/*fprintf(stream, "\t.p2align %d\n", power);
+	fprintf(stream, "\tLOC @+(%d-@)&%d\n", 1 << power, (1 << power) - 1);*/
 
 }
 
@@ -2578,7 +2606,7 @@ static void hip_emit_sp_add(HOST_WIDE_INT offset)
 	{
 		/* Positive adjustments are in the epilogue only.  Don't mark them
 		 as "frame-related" for unwind info.  */
-		if(CONST_OK_FOR_LETTER_P(offset, 'L'))
+		if(CONST_OK_FOR_LETTER_P(offset, 'P'))
 		{
 			emit_insn(
 				gen_adddi3(stack_pointer_rtx, stack_pointer_rtx, GEN_INT(offset))
@@ -2586,7 +2614,7 @@ static void hip_emit_sp_add(HOST_WIDE_INT offset)
 		}
 		else
 		{
-			HIP_WARNING("Offset is not OK for letter L");
+			HIP_WARNING("Offset is not OK for letter P");
 			rtx tmpr = gen_rtx_REG(DImode, 31);
 			emit_move_insn(tmpr, GEN_INT (offset));
 			insn = emit_insn(gen_adddi3 (stack_pointer_rtx, stack_pointer_rtx, tmpr));

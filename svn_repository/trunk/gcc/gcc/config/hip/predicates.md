@@ -170,13 +170,24 @@
 	)
 )
 
+(define_predicate "hip_is_register"
+	(match_operand 0 "register_operand")
+)
+
+(define_predicate "hip_is_8bit"
+	(and
+		(match_code "const_int")
+		(match_test "CONST_OK_FOR_LETTER_P(INTVAL(op), 'G')")
+	)
+)
+
 ;; True if this is a register or an int 0..255.
 (define_predicate "hip_reg_or_8bit_operand"
 	(ior
 		(match_operand 0 "register_operand")
 		(and
 			(match_code "const_int")
-			(match_test "CONST_OK_FOR_LETTER_P(INTVAL (op), 'I')")
+			(match_test "CONST_OK_FOR_LETTER_P(INTVAL(op), 'N')")
 		)
 	)
 )
