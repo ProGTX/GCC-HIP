@@ -18,7 +18,7 @@
 
 # See "Target Fragment" in GCC info.  That same order is used here.
 
-TARGET_LIBGCC2_CFLAGS = -mlibfuncs -O2
+TARGET_LIBGCC2_CFLAGS = -mlibfuncs -O0
 
 # We need to turn off some assumptions on normality for code in crtstuff.c
 # and crt{i,n}.asm, specifically about execution not continuing past the

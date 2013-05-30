@@ -128,26 +128,27 @@
 ;; True if this is an address_operand or a symbolic operand.
 (define_predicate "hip_symbolic_or_address_operand"
 	(match_code "symbol_ref, label_ref, const, subreg, reg, plus")
-{
-  switch (GET_CODE (op))
 	{
-	case SYMBOL_REF:
-	case LABEL_REF:
-	  return 1;
-	case CONST:
-	  /* The reason why this body still is C.  */
-	  op = XEXP (op, 0);
-	  if ((GET_CODE (XEXP (op, 0)) == SYMBOL_REF
-	   || GET_CODE (XEXP (op, 0)) == LABEL_REF)
-	  && (GET_CODE (XEXP (op, 1)) == CONST_INT
-		  || (GET_CODE (XEXP (op, 1)) == CONST_DOUBLE
-		  && GET_MODE (XEXP (op, 1)) == VOIDmode)))
-	return 1;
-	  /* Fall through.  */
-	default:
-	  return address_operand (op, mode);
+	  switch (GET_CODE (op))
+		{
+		case SYMBOL_REF:
+		case LABEL_REF:
+		  return 1;
+		case CONST:
+		  /* The reason why this body still is C.  */
+		  op = XEXP (op, 0);
+		  if ((GET_CODE (XEXP (op, 0)) == SYMBOL_REF
+		   || GET_CODE (XEXP (op, 0)) == LABEL_REF)
+		  && (GET_CODE (XEXP (op, 1)) == CONST_INT
+			  || (GET_CODE (XEXP (op, 1)) == CONST_DOUBLE
+			  && GET_MODE (XEXP (op, 1)) == VOIDmode)))
+		return 1;
+		  /* Fall through.  */
+		default:
+		  return address_operand (op, mode);
+		}
 	}
-})
+)
 
 ;; True if this is a register or CONST_INT.
 ;; We could narrow the value down with a couple of predicates, but that
@@ -187,7 +188,7 @@
 		(match_operand 0 "register_operand")
 		(and
 			(match_code "const_int")
-			(match_test "CONST_OK_FOR_LETTER_P(INTVAL(op), 'N')")
+			(match_test "CONST_OK_FOR_LETTER_P(INTVAL(op), 'G')")
 		)
 	)
 )

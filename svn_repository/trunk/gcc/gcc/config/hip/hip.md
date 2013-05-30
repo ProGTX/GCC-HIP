@@ -39,8 +39,10 @@
 ; FIXME: Can we remove the reg-to-reg for smaller modes?	Shouldn't they
 ; be synthesized ok?
 (define_insn "movqi"
-	[(set (match_operand:QI 0 "nonimmediate_operand" "=r,r ,r,x ,r,r,m,??r")
-	(match_operand:QI 1 "general_operand"			"r,LS,K,rI,x,m,r,n"))]
+	[(set
+		(match_operand:QI 0 "nonimmediate_operand" "=r,r ,r,x ,r,r,m,??r")
+		(match_operand:QI 1 "general_operand"			"r,LS,K,rI,x,m,r,n")
+	)]
 	""
 	"@
 	SET %0,%1
@@ -50,7 +52,8 @@
 	GET %0,%1
 	LDB%U0 %0,%1
 	STBU %1,%0
-	%r0%I1")
+	%r0%I1"
+)
 
 (define_insn "movhi"
 	[(set (match_operand:HI 0 "nonimmediate_operand" "=r,r ,r ,x,r,r,m,??r")
@@ -142,101 +145,19 @@
 	""
 	"")
 
-(define_insn "adddi3"
-	[(set (match_operand:DI 0 "register_operand"	"=r,r,r")
-	(plus:DI
-		(match_operand:DI 1 "register_operand" "%r,r,0")
-		(match_operand:DI 2 "hip_reg_or_constant_operand" "rI,K,LS")))]
-	""
-	"@
-	addu %0,%1,%2
-	SUBU %0,%1,%n2
-	%i2 %0,%v2")
-
-; Insn canonicalization *should* have removed the need for an integer
-; in operand 2.
-(define_insn "subdi3"
-[
-	(set
-		(match_operand:DI 0 "register_operand" "=r,r")
-		(minus:DI
-			(match_operand:DI 1 "hip_reg_or_8bit_operand" "r,I")
-			(match_operand:DI 2 "register_operand" "r,r")
+(define_insn "addsi3"
+	[(set
+		(match_operand:SI 0 "register_operand"	"=r, =r")
+		(plus:SI
+			(match_operand:SI 1 "register_operand"				"r, %r")
+			(match_operand:SI 2 "hip_reg_or_constant_operand"	"r, rI")
 		)
-	)
-]
+	)]
 	""
 	"@
-	SUBU %0,%1,%2
-	NEGU %0,%1,%2")
-
-
-; FIXME: Should we define_expand and match 2, 4, 8 (etc) with shift (or
-; %{something}2addu %0,%1,0)?	Hopefully GCC should still handle it, so
-; we don't have to taint the machine description.	If results are bad
-; enough, we may have to do it anyway.
-(define_insn "muldi3"
-	[(set (match_operand:DI 0 "register_operand" "=r,r")
-	(mult:DI (match_operand:DI 1 "register_operand" "%r,r")
-			(match_operand:DI 2 "hip_reg_or_8bit_operand" "O,rI")))
-	(clobber (match_scratch:DI 3 "=X,z"))]
-	""
-	"@
-	%m2addu %0,%1,%1
-	MULU %0,%1,%2")
-
-(define_insn "muldf3"
-	[(set (match_operand:DF 0 "register_operand" "=r")
-	(mult:DF (match_operand:DF 1 "register_operand" "r")
-			(match_operand:DF 2 "register_operand" "r")))]
-	""
-	"FMUL %0,%1,%2")
-
-(define_insn "divdf3"
-	[(set (match_operand:DF 0 "register_operand" "=r")
-	(div:DF (match_operand:DF 1 "register_operand" "r")
-		(match_operand:DF 2 "register_operand" "r")))]
-	""
-	"FDIV %0,%1,%2")
-
-; FIXME: Is "frem" doing the right operation for moddf3?
-(define_insn "moddf3"
-	[(set (match_operand:DF 0 "register_operand" "=r")
-	(mod:DF (match_operand:DF 1 "register_operand" "r")
-		(match_operand:DF 2 "register_operand" "r")))]
-	""
-	"FREM %0,%1,%2")
-
-; FIXME: Should we define_expand for smin, smax, umin, umax using a
-; nifty conditional sequence?
-
-; FIXME: The cuter andn combinations don't get here, presumably because
-; they ended up in the constant pool.	Check: still?
-(define_insn "anddi3"
-	[(set (match_operand:DI 0 "register_operand" "=r,r")
-	(and:DI
-		(match_operand:DI 1 "register_operand" "%r,0")
-		(match_operand:DI 2 "hip_reg_or_constant_operand" "rI,NT")))]
-	""
-	"@
-	AND %0,%1,%2
-	%A2 %0,%V2")
-
-(define_insn "iordi3"
-	[(set (match_operand:DI 0 "register_operand" "=r,r")
-	(ior:DI (match_operand:DI 1 "register_operand" "%r,0")
-		(match_operand:DI 2 "hip_reg_or_constant_operand" "rH,LS")))]
-	""
-	"@
-	OR %0,%1,%2
-	%o2 %0,%v2")
-
-(define_insn "xordi3"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(xor:DI (match_operand:DI 1 "register_operand" "%r")
-		(match_operand:DI 2 "hip_reg_or_8bit_operand" "rI")))]
-	""
-	"XOR %0,%1,%2")
+	add %0,%1,%2
+	addi %0,%1,%n2"
+)
 
 ; FIXME:	When TImode works for other reasons (like cross-compiling from
 ; a 32-bit host), add back umulditi3 and umuldi3_highpart here.
@@ -251,61 +172,26 @@
 ; standards in effect at 2002-04-29 reportedly demand that the sign of
 ; the remainder must follow the sign of the dividend.
 
-(define_insn "divmoddi4"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(div:DI (match_operand:DI 1 "register_operand" "r")
-		(match_operand:DI 2 "hip_reg_or_8bit_operand" "rI")))
-	(set (match_operand:DI 3 "register_operand" "=y")
-	(mod:DI (match_dup 1) (match_dup 2)))]
-	; Do the library stuff later.
-	"TARGET_KODEK_DIVISION"
-	"DIV %0,%1,%2")
-
-(define_insn "udivmoddi4"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(udiv:DI (match_operand:DI 1 "register_operand" "r")
-			(match_operand:DI 2 "hip_reg_or_8bit_operand" "rI")))
-	(set (match_operand:DI 3 "register_operand" "=y")
-	(umod:DI (match_dup 1) (match_dup 2)))]
-	""
-	"DIVU %0,%1,%2")
-
 (define_expand "divdi3"
 	[(parallel
-		[(set (match_operand:DI 0 "register_operand" "=&r")
-		(div:DI (match_operand:DI 1 "register_operand" "r")
-			(match_operand:DI 2 "register_operand" "r")))
-		(clobber (scratch:DI))
-		(clobber (scratch:DI))
-		(clobber (reg:DI HIP_rR_REGNUM))
+		[(set (match_operand:SI 0 "register_operand" "=&r")
+		(div:SI (match_operand:SI 1 "register_operand" "r")
+			(match_operand:SI 2 "register_operand" "r")))
+		(clobber (scratch:SI))
+		(clobber (scratch:SI))
+		(clobber (reg:SI HIP_rR_REGNUM))
 	])]
 	"! TARGET_KODEK_DIVISION"
 	"")
 
-; The %2-is-%1-case is there just to make sure things don't fail.	Could
-; presumably happen with optimizations off; no evidence.
-(define_insn "*divdi3_nonkodek"
-	[(set (match_operand:DI 0 "register_operand" "=&r,&r")
-	(div:DI (match_operand:DI 1 "register_operand" "r,r")
-		(match_operand:DI 2 "register_operand" "1,r")))
-	(clobber (match_scratch:DI 3 "=1,1"))
-	(clobber (match_scratch:DI 4 "=2,2"))
-	(clobber (reg:DI HIP_rR_REGNUM))
-	]
-	"! TARGET_KODEK_DIVISION"
-	"@
-	SETL %0,1
-	XOR r20,%1,%2\;NEGU %0,0,%2\;CSN %2,%2,%0\;NEGU %0,0,%1\;CSN %1,%1,%0\;\
-DIVU %0,%1,%2\;NEGU %1,0,%0\;CSN %0,r20,%1")
-
 (define_expand "moddi3"
 	[(parallel
-		[(set (match_operand:DI 0 "register_operand" "=&r")
-		(mod:DI (match_operand:DI 1 "register_operand" "r")
-			(match_operand:DI 2 "register_operand" "r")))
-		(clobber (scratch:DI))
-		(clobber (scratch:DI))
-		(clobber (reg:DI HIP_rR_REGNUM))
+		[(set (match_operand:SI 0 "register_operand" "=&r")
+		(mod:SI (match_operand:SI 1 "register_operand" "r")
+			(match_operand:SI 2 "register_operand" "r")))
+		(clobber (scratch:SI))
+		(clobber (scratch:SI))
+		(clobber (reg:SI HIP_rR_REGNUM))
 	])]
 	"! TARGET_KODEK_DIVISION"
 	"")
@@ -313,46 +199,46 @@ DIVU %0,%1,%2\;NEGU %1,0,%0\;CSN %0,r20,%1")
 ; The %2-is-%1-case is there just to make sure things don't fail.	Could
 ; presumably happen with optimizations off; no evidence.
 (define_insn "*moddi3_nonkodek"
-	[(set (match_operand:DI 0 "register_operand" "=&r,&r")
-	(mod:DI (match_operand:DI 1 "register_operand" "r,r")
-		(match_operand:DI 2 "register_operand" "1,r")))
-	(clobber (match_scratch:DI 3 "=1,1"))
-	(clobber (match_scratch:DI 4 "=2,2"))
-	(clobber (reg:DI HIP_rR_REGNUM))
+	[(set (match_operand:SI 0 "register_operand" "=&r,&r")
+	(mod:SI (match_operand:SI 1 "register_operand" "r,r")
+		(match_operand:SI 2 "register_operand" "1,r")))
+	(clobber (match_scratch:SI 3 "=1,1"))
+	(clobber (match_scratch:SI 4 "=2,2"))
+	(clobber (reg:SI HIP_rR_REGNUM))
 	]
 	"! TARGET_KODEK_DIVISION"
 	"@
 	SETL %0,0
 	NEGU %0,0,%2\;CSN %2,%2,%0\;NEGU r20,0,%1\;CSN %1,%1,r20\;\
-DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
+SIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 
 (define_insn "ashldi3"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(ashift:DI
-		(match_operand:DI 1 "register_operand" "r")
-		(match_operand:DI 2 "hip_reg_or_8bit_operand" "rI")))]
+	[(set (match_operand:SI 0 "register_operand" "=r")
+	(ashift:SI
+		(match_operand:SI 1 "register_operand" "r")
+		(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI")))]
 	""
 	"SLU %0,%1,%2")
 
 (define_insn "ashrdi3"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(ashiftrt:DI
-		(match_operand:DI 1 "register_operand" "r")
-		(match_operand:DI 2 "hip_reg_or_8bit_operand" "rI")))]
+	[(set (match_operand:SI 0 "register_operand" "=r")
+	(ashiftrt:SI
+		(match_operand:SI 1 "register_operand" "r")
+		(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI")))]
 	""
 	"SR %0,%1,%2")
 
 (define_insn "lshrdi3"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(lshiftrt:DI
-		(match_operand:DI 1 "register_operand" "r")
-		(match_operand:DI 2 "hip_reg_or_8bit_operand" "rI")))]
+	[(set (match_operand:SI 0 "register_operand" "=r")
+	(lshiftrt:SI
+		(match_operand:SI 1 "register_operand" "r")
+		(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI")))]
 	""
 	"SRU %0,%1,%2")
 
 (define_insn "negdi2"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(neg:DI (match_operand:DI 1 "register_operand" "r")))]
+	[(set (match_operand:SI 0 "register_operand" "=r")
+	(neg:SI (match_operand:SI 1 "register_operand" "r")))]
 	""
 	"NEGU %0,0,%1")
 
@@ -363,13 +249,13 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 	""
 {
 	/* Emit bit-flipping sequence to be IEEE-safe wrt. -+0.	*/
-	/*operands[2] = force_reg (DImode, GEN_INT ((HOST_WIDE_INT) 1 << 31));*/
+	/*operands[2] = force_reg (SImode, GEN_INT ((HOST_WIDE_INT) 1 << 31));*/
 })
 
 (define_insn "*expanded_negdf2"
 	[(set (match_operand:DF 0 "register_operand" "=r")
 			(neg:DF (match_operand:DF 1 "register_operand" "r")))
-	(use (match_operand:DI 2 "register_operand" "r"))]
+	(use (match_operand:SI 2 "register_operand" "r"))]
 	""
 	"XOR %0,%1,%2")
 
@@ -384,8 +270,8 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 ; FIXME: define_expand for ffssi2? (not ffsdi2 since int is SImode).
 
 (define_insn "one_cmpldi2"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(not:DI (match_operand:DI 1 "register_operand" "r")))]
+	[(set (match_operand:SI 0 "register_operand" "=r")
+	(not:SI (match_operand:SI 1 "register_operand" "r")))]
 	""
 	"NOR %0,%1,0")
 
@@ -402,7 +288,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 (define_insn "*cmpdi_folded"
 	[(set (match_operand:CC 0 "register_operand" "=r")
 	(compare:CC
-		(match_operand:DI 1 "register_operand" "r")
+		(match_operand:SI 1 "register_operand" "r")
 		(const_int 0)))]
 	; FIXME: Can we test equivalence any other way?
 	; FIXME: Can we fold any other way?
@@ -413,16 +299,16 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 (define_insn "*cmps"
 	[(set (match_operand:CC 0 "register_operand" "=r")
 	(compare:CC
-		(match_operand:DI 1 "register_operand" "r")
-		(match_operand:DI 2 "hip_reg_or_8bit_operand" "rI")))]
+		(match_operand:SI 1 "register_operand" "r")
+		(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI")))]
 	""
 	"CMP %0,%1,%2")
 
 (define_insn "*cmpu"
 	[(set (match_operand:CC_UNS 0 "register_operand" "=r")
 	(compare:CC_UNS
-		(match_operand:DI 1 "register_operand" "r")
-		(match_operand:DI 2 "hip_reg_or_8bit_operand" "rI")))]
+		(match_operand:SI 1 "register_operand" "r")
+		(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI")))]
 	""
 	"CMPU %0,%1,%2")
 
@@ -444,7 +330,8 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 		(match_operand:DF 3 "hip_reg_or_0_operand" "")))]
 	""
 	"
-{/*
+{
+/*
 	enum rtx_code code = GET_CODE (operands[1]);
 	if (code == LE || code == GE)
 		FAIL;
@@ -459,11 +346,11 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 
 (define_expand "movdicc"
 	[(set (match_dup 4) (match_dup 5))
-	(set (match_operand:DI 0 "register_operand" "")
-	(if_then_else:DI
+	(set (match_operand:SI 0 "register_operand" "")
+	(if_then_else:SI
 		(match_operand 1 "comparison_operator" "")
-		(match_operand:DI 2 "hip_reg_or_8bit_operand" "")
-		(match_operand:DI 3 "hip_reg_or_8bit_operand" "")))]
+		(match_operand:SI 2 "hip_reg_or_8bit_operand" "")
+		(match_operand:SI 3 "hip_reg_or_8bit_operand" "")))]
 	""
 	"
 {/*
@@ -479,15 +366,15 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 	operands[1] = gen_rtx_fmt_ee (code, VOIDmode, operands[4], const0_rtx);
 */}")
 
-; FIXME: Is this the right way to do "folding" of CCmode -> DImode?
+; FIXME: Is this the right way to do "folding" of CCmode -> SImode?
 (define_insn "*movdicc_real_foldable"
-	[(set (match_operand:DI 0 "register_operand" "=r,r,r,r")
-	(if_then_else:DI
+	[(set (match_operand:SI 0 "register_operand" "=r,r,r,r")
+	(if_then_else:SI
 		(match_operator 2 "hip_foldable_comparison_operator"
-				[(match_operand:DI 3 "register_operand" "r,r,r,r")
+				[(match_operand:SI 3 "register_operand" "r,r,r,r")
 				(const_int 0)])
-		(match_operand:DI 1 "hip_reg_or_8bit_operand" "rI,0 ,rI,GM")
-		(match_operand:DI 4 "hip_reg_or_8bit_operand" "0 ,rI,GM,rI")))]
+		(match_operand:SI 1 "hip_reg_or_8bit_operand" "rI,0 ,rI,GM")
+		(match_operand:SI 4 "hip_reg_or_8bit_operand" "0 ,rI,GM,rI")))]
 	""
 	"@
 	CS%d2 %0,%3,%1
@@ -497,14 +384,14 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 
 (define_insn "*movdicc_real_reversible"
 	[(set
-		(match_operand:DI 0 "register_operand"		"=r ,r ,r ,r")
-		(if_then_else:DI
+		(match_operand:SI 0 "register_operand"		"=r ,r ,r ,r")
+		(if_then_else:SI
 		(match_operator
 		2 "hip_comparison_operator"
 		[(match_operand 3 "hip_reg_cc_operand"			"r ,r ,r ,r")
 		(const_int 0)])
-		(match_operand:DI 1 "hip_reg_or_8bit_operand" "rI,0 ,rI,GM")
-		(match_operand:DI 4 "hip_reg_or_8bit_operand" "0 ,rI,GM,rI")))]
+		(match_operand:SI 1 "hip_reg_or_8bit_operand" "rI,0 ,rI,GM")
+		(match_operand:SI 4 "hip_reg_or_8bit_operand" "0 ,rI,GM,rI")))]
 	"REVERSIBLE_CC_MODE (GET_MODE (operands[3]))"
 	"@
 	CS%d2 %0,%3,%1
@@ -514,14 +401,14 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 
 (define_insn "*movdicc_real_nonreversible"
 	[(set
-		(match_operand:DI 0 "register_operand"		"=r ,r")
-		(if_then_else:DI
+		(match_operand:SI 0 "register_operand"		"=r ,r")
+		(if_then_else:SI
 		(match_operator
 		2 "hip_comparison_operator"
 		[(match_operand 3 "hip_reg_cc_operand"			"r ,r")
 		(const_int 0)])
-		(match_operand:DI 1 "hip_reg_or_8bit_operand" "rI,rI")
-		(match_operand:DI 4 "hip_reg_or_0_operand" "0 ,GM")))]
+		(match_operand:SI 1 "hip_reg_or_8bit_operand" "rI,rI")
+		(match_operand:SI 4 "hip_reg_or_0_operand" "0 ,GM")))]
 	"!REVERSIBLE_CC_MODE (GET_MODE (operands[3]))"
 	"@
 	CS%d2 %0,%3,%1
@@ -533,7 +420,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 		(if_then_else:DF
 		(match_operator
 		2 "hip_foldable_comparison_operator"
-		[(match_operand:DI 3 "register_operand"		"r	,r	,r	,r")
+		[(match_operand:SI 3 "register_operand"		"r	,r	,r	,r")
 		(const_int 0)])
 		(match_operand:DF 1 "hip_reg_or_0_operand" "rGM,0	,rGM,GM")
 		(match_operand:DF 4 "hip_reg_or_0_operand" "0	,rGM,GM ,rGM")))]
@@ -582,8 +469,8 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 (define_expand "cbranchdi4"
 	[(set (match_dup 4)
 			(match_op_dup 5
-			[(match_operand:DI 1 "register_operand" "")
-				(match_operand:DI 2 "hip_reg_or_8bit_operand" "")]))
+			[(match_operand:SI 1 "register_operand" "")
+				(match_operand:SI 2 "hip_reg_or_8bit_operand" "")]))
 	(set (pc)
 			(if_then_else
 					(match_operator 0 "ordered_comparison_operator"
@@ -610,7 +497,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 	[(set (pc)
 	(if_then_else
 		(match_operator 1 "hip_foldable_comparison_operator"
-				[(match_operand:DI 2 "register_operand" "r")
+				[(match_operand:SI 2 "register_operand" "r")
 				(const_int 0)])
 		(label_ref (match_operand 0 "" ""))
 		(pc)))]
@@ -632,7 +519,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 	[(set (pc)
 	(if_then_else
 		(match_operator 1 "hip_foldable_comparison_operator"
-				[(match_operand:DI 2 "register_operand" "r")
+				[(match_operand:SI 2 "register_operand" "r")
 				(const_int 0)])
 				(pc)
 				(label_ref (match_operand 0 "" ""))))]
@@ -684,7 +571,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 	/*if (operands[2] == NULL_RTX)
 		operands[2] = const0_rtx;
 
-	operands[4] = gen_rtx_REG (DImode, HIP_INCOMING_RETURN_ADDRESS_REGNUM);*/
+	operands[4] = gen_rtx_REG (SImode, HIP_INCOMING_RETURN_ADDRESS_REGNUM);*/
 }")
 
 (define_expand "call_value"
@@ -722,7 +609,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 		*next* argument register, not the number of arguments in registers.
 		(There used to be code here where that mattered.)	*/
 
- /* operands[5] = gen_rtx_REG (DImode, HIP_INCOMING_RETURN_ADDRESS_REGNUM);*/
+ /* operands[5] = gen_rtx_REG (SImode, HIP_INCOMING_RETURN_ADDRESS_REGNUM);*/
 }")
 
 ; Don't use 'p' here.	A 'p' must stand first in constraints, or reload
@@ -741,10 +628,10 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 ; caveats (and very small advantages) of 'p'.
 (define_insn "*call_real"
 	[(call (mem:QI
-		(match_operand:DI 0 "hip_symbolic_or_address_operand" "s,rU"))
+		(match_operand:SI 0 "hip_symbolic_or_address_operand" "s,rU"))
 		(match_operand 1 "" ""))
 	(use (match_operand 2 "" ""))
-	(clobber (reg:DI HIP_rJ_REGNUM))
+	(clobber (reg:SI HIP_rJ_REGNUM))
 	]
 	""
 	"@
@@ -754,10 +641,10 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 (define_insn "*call_value_real"
 	[(set (match_operand 0 "register_operand" "=r,r")
 	(call (mem:QI
-				(match_operand:DI 1 "hip_symbolic_or_address_operand" "s,rU"))
+				(match_operand:SI 1 "hip_symbolic_or_address_operand" "s,rU"))
 			(match_operand 2 "" "")))
 	(use (match_operand 3 "" ""))
-	(clobber (reg:DI HIP_rJ_REGNUM))
+	(clobber (reg:SI HIP_rJ_REGNUM))
 	]
 	""
 	"@
@@ -808,7 +695,7 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 
 ; FIXME: This is just a jump, and should be expanded to one.
 (define_insn "tablejump"
-	[(set (pc) (match_operand:DI 0 "address_operand" "p"))
+	[(set (pc) (match_operand:SI 0 "address_operand" "p"))
 	(use (label_ref (match_operand 1 "" "")))]
 	""
 	"GO r20,%a0")
@@ -823,10 +710,10 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 ; should die with a trap.)
 (define_expand "nonlocal_goto_receiver"
 	[(parallel [(unspec_volatile [(const_int 0)] 1)
-			(clobber (scratch:DI))
-			(clobber (reg:DI HIP_rJ_REGNUM))
+			(clobber (scratch:SI))
+			(clobber (reg:SI HIP_rJ_REGNUM))
 			])
-	(set (reg:DI HIP_rJ_REGNUM) (match_dup 0))
+	(set (reg:SI HIP_rJ_REGNUM) (match_dup 0))
 	]
 	""
 	"
@@ -845,8 +732,8 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 ; to form the address ourselves.
 (define_insn "*nonlocal_goto_receiver_expanded"
 	[(unspec_volatile [(const_int 0)] 1)
-	(clobber (match_scratch:DI 0 "=&r"))
-	(clobber (reg:DI HIP_rJ_REGNUM))
+	(clobber (match_scratch:SI 0 "=&r"))
+	(clobber (reg:SI HIP_rJ_REGNUM))
 	]
 	""
 {/*
@@ -892,10 +779,10 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 })
 
 (define_insn "*Naddu"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(plus:DI (mult:DI (match_operand:DI 1 "register_operand" "r")
-				(match_operand:DI 2 "const_int_operand" "n"))
-			(match_operand:DI 3 "hip_reg_or_8bit_operand" "rI")))]
+	[(set (match_operand:SI 0 "register_operand" "=r")
+	(plus:SI (mult:SI (match_operand:SI 1 "register_operand" "r")
+				(match_operand:SI 2 "const_int_operand" "n"))
+			(match_operand:SI 3 "hip_reg_or_8bit_operand" "rI")))]
 	"GET_CODE (operands[2]) == CONST_INT
 	&& (INTVAL (operands[2]) == 2
 			|| INTVAL (operands[2]) == 4
@@ -904,40 +791,40 @@ DIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
 	"%2addu %0,%1,%3")
 
 (define_insn "*andn"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(and:DI
-		(not:DI (match_operand:DI 1 "hip_reg_or_8bit_operand" "rI"))
-		(match_operand:DI 2 "register_operand" "r")))]
+	[(set (match_operand:SI 0 "register_operand" "=r")
+	(and:SI
+		(not:SI (match_operand:SI 1 "hip_reg_or_8bit_operand" "rI"))
+		(match_operand:SI 2 "register_operand" "r")))]
 	""
 	"ANDN %0,%2,%1")
 
 (define_insn "*nand"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(ior:DI
-		(not:DI (match_operand:DI 1 "register_operand" "%r"))
-		(not:DI (match_operand:DI 2 "hip_reg_or_8bit_operand" "rI"))))]
+	[(set (match_operand:SI 0 "register_operand" "=r")
+	(ior:SI
+		(not:SI (match_operand:SI 1 "register_operand" "%r"))
+		(not:SI (match_operand:SI 2 "hip_reg_or_8bit_operand" "rI"))))]
 	""
 	"NAND %0,%1,%2")
 
 (define_insn "*nor"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(and:DI
-		(not:DI (match_operand:DI 1 "register_operand" "%r"))
-		(not:DI (match_operand:DI 2 "hip_reg_or_8bit_operand" "rI"))))]
+	[(set (match_operand:SI 0 "register_operand" "=r")
+	(and:SI
+		(not:SI (match_operand:SI 1 "register_operand" "%r"))
+		(not:SI (match_operand:SI 2 "hip_reg_or_8bit_operand" "rI"))))]
 	""
 	"NOR %0,%1,%2")
 
 (define_insn "*nxor"
-	[(set (match_operand:DI 0 "register_operand" "=r")
-	(not:DI
-		(xor:DI (match_operand:DI 1 "register_operand" "%r")
-			(match_operand:DI 2 "hip_reg_or_8bit_operand" "rI"))))]
+	[(set (match_operand:SI 0 "register_operand" "=r")
+	(not:SI
+		(xor:SI (match_operand:SI 1 "register_operand" "%r")
+			(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI"))))]
 	""
 	"NXOR %0,%1,%2")
 
 (define_insn "sync_icache"
-	[(unspec_volatile [(match_operand:DI 0 "memory_operand" "m")
-				(match_operand:DI 1 "const_int_operand" "I")] 0)]
+	[(unspec_volatile [(match_operand:SI 0 "memory_operand" "m")
+				(match_operand:SI 1 "const_int_operand" "I")] 0)]
 	""
 	"SYNCID %1,%0")
 

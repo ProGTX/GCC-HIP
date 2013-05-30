@@ -143,7 +143,6 @@ static void hip_asm_output_mi_thunk(FILE *, tree, HOST_WIDE_INT, HOST_WIDE_INT,
 static void hip_setup_incoming_varargs(CUMULATIVE_ARGS *, enum machine_mode,
 		tree, int *, int);
 static void hip_file_start(void);
-static void hip_file_end(void);
 static bool hip_rtx_costs(rtx, int, int, int *, bool);
 static rtx hip_struct_value_rtx(tree, int);
 static enum machine_mode hip_promote_function_mode(const_tree,
@@ -213,8 +212,6 @@ static const struct default_options hip_option_optimization_table[] =
 #define TARGET_ASM_FILE_START hip_file_start
 #undef TARGET_ASM_FILE_START_FILE_DIRECTIVE
 #define TARGET_ASM_FILE_START_FILE_DIRECTIVE true
-#undef TARGET_ASM_FILE_END
-#define TARGET_ASM_FILE_END hip_file_end
 #undef TARGET_ASM_OUTPUT_SOURCE_FILENAME
 #define TARGET_ASM_OUTPUT_SOURCE_FILENAME hip_asm_output_source_filename
 
@@ -385,10 +382,15 @@ static void hip_conditional_register_usage(void)
 
 	/* Step over the ":" in special register names.  */
 	if(!TARGET_TOPLEVEL_SYMBOLS)
+	{
 		for (i = 0; i < FIRST_PSEUDO_REGISTER; i++)
+		{
 			if(reg_names[i][0] == ':')
+			{
 				reg_names[i]++;
-
+			}
+		}
+	}
 }
 
 /*
@@ -470,8 +472,8 @@ int hip_const_ok_for_letter_p(HOST_WIDE_INT value, int c)
 			/*return hip_shiftable_wyde_value(value);*/
 		/*case 'M':
 			TODO: What is this supposed to be?
-			/* A constant that cannot be loaded using lhi, addiu.
-			/*return hip_shiftable_wyde_value(~value);*/
+			 A constant that cannot be loaded using lhi, addiu.
+			return hip_shiftable_wyde_value(~value);*/
 		case 'N':
 			/* Valid register number. */
 			return value >= 0 && value <= 31;
@@ -1207,7 +1209,7 @@ enum machine_mode hip_select_cc_mode(RTX_CODE op, rtx x, rtx y ATTRIBUTE_UNUSED)
 	 output different compare insns.  Note that we do not check the
 	 validity of the comparison here.  */
 
-	if(GET_MODE_CLASS (GET_MODE (x)) == MODE_FLOAT)
+	if(GET_MODE_CLASS(GET_MODE (x)) == MODE_FLOAT)
 	{
 		if(
 			op == ORDERED	|| op == UNORDERED	|| op == UNGE	||
@@ -1269,20 +1271,6 @@ int hip_register_move_cost(
 
 }
 
-/* Note that we don't have a TEXT_SECTION_ASM_OP, because it has to be a
- compile-time constant; it's used in an asm in crtstuff.c, compiled for
- the target.  */
-
-/*
-	TODO: Probably don't need this, a simple macro is already defined.
-*/
-const char *
-hip_data_section_asm_op(void)
-{
-	HIP_FUNCTION_ENTRY();
-	return "\t.data";
-
-}
 
 static void hip_encode_section_info(tree decl, rtx rtl, int first)
 {
@@ -1346,28 +1334,20 @@ hip_strip_name_encoding(const char *name)
 /*
 	TARGET_ASM_FILE_START.
 	We just emit a little comment for the time being.
+	TODO: Need to change.
 */
 static void hip_file_start(void)
 {
 	HIP_FUNCTION_ENTRY();
 	default_file_start();
 
-	fputs("#\tData section\n", asm_out_file);
+	/*fputs("#\tData section\n", asm_out_file);*/
 
 	/* Make sure each file starts with the text section.  */
 	switch_to_section(text_section);
 
 }
 
-/* TARGET_ASM_FILE_END.  */
-
-static void hip_file_end(void)
-{
-	HIP_FUNCTION_ENTRY();
-	/* Make sure each file ends with the data section.  */
-	switch_to_section(data_section);
-
-}
 
 /* TARGET_ASM_OUTPUT_SOURCE_FILENAME.  */
 
@@ -1441,22 +1421,30 @@ static bool hip_emit_integer(rtx x, char* instruction, char letter, int* aligned
 	}
 
 	fputs(instruction, asm_out_file);
-	hip_print_operand(asm_out_file, x, letter);
+
+	fprintf(asm_out_file, "%d", INTVAL(x));
+	/*hip_print_operand(asm_out_file, x, letter);*/
+
 	fputc('\n', asm_out_file);
 
 	return true;
 }
 
+/*
+	TARGET_ASM_INTEGER
+*/
 static bool hip_assemble_integer(rtx x, unsigned int size, int aligned_p)
 {
 	HIP_FUNCTION_ENTRY();
 
+	warning(0, "hip_assemble_integer, x: %d, size: %d, aligned: %d", INTVAL(x), size, aligned_p);
+
 	if(aligned_p)
 	{
-		switch (size)
+		switch(size)
 		{
 			case 1:
-				if(hip_emit_integer(x, "\t.byte\t", 'B', &aligned_p))
+				if(hip_emit_integer(x, "\t.byte\t", 'Q', &aligned_p))
 				{
 					return true;
 				}
@@ -1470,7 +1458,7 @@ static bool hip_assemble_integer(rtx x, unsigned int size, int aligned_p)
 				break;
 
 			case 4:
-				if(hip_emit_integer(x, "\t.word\t", 'W', &aligned_p))
+				if(hip_emit_integer(x, "\t.word\t", 'S', &aligned_p))
 				{
 					return true;
 				}
@@ -1502,7 +1490,6 @@ void hip_asm_output_ascii(FILE *stream, const char *string, int length)
 
 /*
 	ASM_OUTPUT_ALIGNED_COMMON.
-	TODO: Need to change.
 */
 void hip_asm_output_aligned_common(
 	FILE *stream, const char *name, int size, int align
@@ -1510,18 +1497,12 @@ void hip_asm_output_aligned_common(
 {
 	HIP_FUNCTION_ENTRY();
 
-	fprintf(stream, "\t.align %d\n", align / BITS_PER_UNIT);
+	if(size == 2 || size == 4)
+	{
+		fprintf(stream, "\t.align %d\n", size);
+	}
 	assemble_name(stream, name);
-	fprintf(stream, "\t.space %d", size);
-
-	/* This is mostly the elfos.h one.  There doesn't seem to be a way to
-	 express this in a hipal-compatible way.  */
-	/*fprintf(stream, "\t.comm\t");
-	assemble_name(stream, name);
-	fprintf(
-		stream, ",%u,%u ! hipal-incompatible COMMON\n", size, align / BITS_PER_UNIT
-	);*/
-
+	fprintf(stream, "\t.space %d\t# hip_asm_output_aligned_common %d\n", size, align);
 }
 
 /*
@@ -1537,7 +1518,7 @@ void hip_asm_output_aligned_local(
 
 	ASM_OUTPUT_ALIGN(stream, exact_log2(align / BITS_PER_UNIT));
 	assemble_name(stream, name);
-	fprintf(stream, "\tLOC @+%d\n", size);
+	fprintf(stream, "\t_br1_\tLOC @+%d\t# hip_asm_output_aligned_local\n", size);
 
 }
 
@@ -1638,6 +1619,7 @@ void hip_asm_output_labelref(FILE *stream, const char *name)
 void hip_asm_output_def(FILE *stream, const char *name, const char *value)
 {
 	HIP_FUNCTION_ENTRY();
+	warning(0, "hip_asm_output_def, name: %s", name);
 	assemble_name(stream, name);
 	fprintf(stream, "\tIS ");
 	assemble_name(stream, value);
@@ -1651,178 +1633,191 @@ void hip_asm_output_def(FILE *stream, const char *name, const char *value)
 */
 void hip_print_operand(FILE *stream, rtx x, int code)
 {
+	if(x == NULL)
+	{
+		warning(0, "x is null");
+		return;
+	}
+
 	HIP_FUNCTION_ENTRY();
 	/* When we add support for different codes later, we can, when needed,
 	 drop through to the main handler with a modified operand.  */
 	rtx modified_x = x;
 	int regno = x != NULL_RTX && REG_P (x) ? REGNO (x) : 0;
 
+	/*warning(0, "hip_print_operand, x: %d, code: %d", INTVAL(x), code);*/
+	if(INTVAL(x) > 1000)
+	{
+		warning(0, "hip_print_operand: %d", INTVAL(x));
+	}
+	debug_rtx(x);
+
 	switch (code)
 	{
 	/* Unrelated codes are in alphabetic order.  */
-
-	case '+':
-		/* For conditional branches, output "P" for a probable branch.  */
-		if(TARGET_BRANCH_PREDICT)
-		{
-			x = find_reg_note(current_output_insn, REG_BR_PROB, 0);
-			if(x && INTVAL (XEXP (x, 0))> REG_BR_PROB_BASE / 2)
-			putc ('P', stream);
-		}
-		return;
-
-	case '.':
-		/* For the %d in POP %d,0.  */
-		fprintf (stream, "%d", HIP_POP_ARGUMENT ());
-		return;
-
-	case 'B':
-		if(GET_CODE (x) != CONST_INT)
-			fatal_insn ("HIP Internal: Expected a CONST_INT, not this", x);
-		fprintf (stream, "%d", (int) (INTVAL (x) & 0xff));
-		return;
-
-	case 'H':
-		/* Highpart.  Must be general register, and not the last one, as
-		 that one cannot be part of a consecutive register pair.  */
-		if(regno > HIP_LAST_GENERAL_REGISTER - 1)
-			internal_error ("HIP Internal: Bad register: %d", regno);
-
-		/* This is big-endian, so the high-part is the first one.  */
-		fprintf (stream, "%s", reg_names[HIP_OUTPUT_REGNO (regno)]);
-		return;
-
-	case 'L':
-		/* Lowpart.  Must be CONST_INT or general register, and not the last
-		 one, as that one cannot be part of a consecutive register pair.  */
-		if(GET_CODE (x) == CONST_INT)
-		{
-			fprintf (stream, "#%lx",
-					(unsigned long) (INTVAL (x)
-							& ((unsigned int) 0x7fffffff * 2 + 1)));
+		case '+':
+			/* For conditional branches, output "P" for a probable branch.  */
+			if(TARGET_BRANCH_PREDICT)
+			{
+				x = find_reg_note(current_output_insn, REG_BR_PROB, 0);
+				if(x && INTVAL (XEXP (x, 0))> REG_BR_PROB_BASE / 2)
+				putc ('P', stream);
+			}
 			return;
-		}
 
-		if(GET_CODE (x) == SYMBOL_REF)
-		{
-			output_addr_const (stream, x);
+		case '.':
+			/* For the %d in POP %d,0.  */
+			fprintf (stream, "%d", HIP_POP_ARGUMENT ());
 			return;
-		}
 
-		if(regno > HIP_LAST_GENERAL_REGISTER - 1)
-			internal_error ("HIP Internal: Bad register: %d", regno);
+		case 'B':
+			if(GET_CODE (x) != CONST_INT)
+				fatal_insn("HIP Internal: Expected a CONST_INT, not this", x);
+			fprintf (stream, "%d", (int) (INTVAL (x) & 0xff));
+			return;
 
-		/* This is big-endian, so the low-part is + 1.  */
-		fprintf (stream, "%s", reg_names[HIP_OUTPUT_REGNO (regno) + 1]);
-		return;
+		case 'H':
+			/* Highpart.  Must be general register, and not the last one, as
+			 that one cannot be part of a consecutive register pair.  */
+			if(regno > HIP_LAST_GENERAL_REGISTER - 1)
+				internal_error ("HIP Internal: Bad register: %d", regno);
 
-		/* Can't use 'a' because that's a generic modifier for address
-		 output.  */
-	case 'A':
-		hip_output_shiftvalue_op_from_str (stream, "ANDN",
-				~(unsigned HOST_WIDEST_INT)
-				hip_intval (x));
-		return;
+			/* This is big-endian, so the high-part is the first one.  */
+			fprintf (stream, "%s", reg_names[HIP_OUTPUT_REGNO (regno)]);
+			return;
 
-	case 'i':
-		hip_output_shiftvalue_op_from_str (stream, "INC",
-				(unsigned HOST_WIDEST_INT)
-				hip_intval (x));
-		return;
+		case 'L':
+			/* Lowpart.  Must be CONST_INT or general register, and not the last
+			 one, as that one cannot be part of a consecutive register pair.  */
+			if(GET_CODE (x) == CONST_INT)
+			{
+				fprintf (stream, "#%lx",
+						(unsigned long) (INTVAL (x)
+								& ((unsigned int) 0x7fffffff * 2 + 1)));
+				return;
+			}
 
-	case 'o':
-		hip_output_shiftvalue_op_from_str (stream, "OR",
-				(unsigned HOST_WIDEST_INT)
-				hip_intval (x));
-		return;
+			if(GET_CODE (x) == SYMBOL_REF)
+			{
+				output_addr_const (stream, x);
+				return;
+			}
 
-	case 's':
-		hip_output_shiftvalue_op_from_str (stream, "SET",
-				(unsigned HOST_WIDEST_INT)
-				hip_intval (x));
-		return;
+			if(regno > HIP_LAST_GENERAL_REGISTER - 1)
+				internal_error ("HIP Internal: Bad register: %d", regno);
 
-	case 'd':
-	case 'D':
-		hip_output_condition (stream, x, (code == 'D'));
-		return;
+			/* This is big-endian, so the low-part is + 1.  */
+			fprintf (stream, "%s", reg_names[HIP_OUTPUT_REGNO (regno) + 1]);
+			return;
 
-	case 'e':
-		/* Output an extra "e" to make fcmpe, fune.  */
-		if(TARGET_FCMP_EPSILON)
-		fprintf (stream, "e");
-		return;
+			/* Can't use 'a' because that's a generic modifier for address
+			 output.  */
+		case 'A':
+			hip_output_shiftvalue_op_from_str (stream, "ANDN",
+					~(unsigned HOST_WIDEST_INT)
+					hip_intval (x));
+			return;
 
-	case 'm':
-		/* Output the number minus 1.  */
-		if(GET_CODE (x) != CONST_INT)
-		{
-			fatal_insn ("HIP Internal: Bad value for 'm', not a CONST_INT",
-					x);
-		}
-		fprintf (stream, HOST_WIDEST_INT_PRINT_DEC,
-				(HOST_WIDEST_INT) (hip_intval (x) - 1));
-		return;
+		case 'i':
+			hip_output_shiftvalue_op_from_str (stream, "INC",
+					(unsigned HOST_WIDEST_INT)
+					hip_intval (x));
+			return;
 
-	case 'p':
-		/* Store the number of registers we want to save.  This was setup
-		 by the prologue.  The actual operand contains the number of
-		 registers to pass, but we don't use it currently.  Anyway, we
-		 need to output the number of saved registers here.  */
-		fprintf (stream, "%d",
-				cfun->machine->highest_saved_stack_register + 1);
-		return;
+		case 'o':
+			hip_output_shiftvalue_op_from_str (stream, "OR",
+					(unsigned HOST_WIDEST_INT)
+					hip_intval (x));
+			return;
 
-	case 'r':
-		/* Store the register to output a constant to.  */
-		if(! REG_P (x))
-		fatal_insn ("HIP Internal: Expected a register, not this", x);
-		hip_output_destination_register = HIP_OUTPUT_REGNO (regno);
-		return;
+		case 's':
+			hip_output_shiftvalue_op_from_str (stream, "SET",
+					(unsigned HOST_WIDEST_INT)
+					hip_intval (x));
+			return;
 
-	case 'I':
-		/* Output the constant.  Note that we use this for floats as well.  */
-		if(GET_CODE (x) != CONST_INT
-				&& (GET_CODE (x) != CONST_DOUBLE
-						|| (GET_MODE (x) != VOIDmode && GET_MODE (x) !=DFmode
-		  && GET_MODE (x) != SFmode)))
-	fatal_insn ("HIP Internal: Expected a constant, not this", x);
-      hip_output_register_setting (stream,
-				    hip_output_destination_register,
-				    hip_intval (x), 0);
-      return;
+		case 'd':
+		case 'D':
+			hip_output_condition(stream, x, (code == 'D'));
+			return;
 
-    case 'U':
-      /* An U for unsigned, if TARGET_ZERO_EXTEND.  Ignore the operand.  */
-      if(TARGET_ZERO_EXTEND)
-	putc ('U', stream);
-      return;
+		case 'e':
+			/* Output an extra "e" to make fcmpe, fune.  */
+			if(TARGET_FCMP_EPSILON)
+			fprintf (stream, "e");
+			return;
 
-    case 'v':
-		hip_output_shifted_value (stream, (HOST_WIDEST_INT) hip_intval (x));
-		return;
+		case 'm':
+			/* Output the number minus 1.  */
+			if(GET_CODE (x) != CONST_INT)
+			{
+				fatal_insn ("HIP Internal: Bad value for 'm', not a CONST_INT",
+						x);
+			}
+			fprintf(
+				stream, HOST_WIDEST_INT_PRINT_DEC, (HOST_WIDEST_INT) (hip_intval (x) - 1)
+			);
+			return;
 
-    case 'V':
-		hip_output_shifted_value (stream, (HOST_WIDEST_INT) ~hip_intval (x));
-		return;
+		case 'p':
+			/* Store the number of registers we want to save.  This was setup
+			 by the prologue.  The actual operand contains the number of
+			 registers to pass, but we don't use it currently.  Anyway, we
+			 need to output the number of saved registers here.  */
+			fprintf (stream, "%d",
+					cfun->machine->highest_saved_stack_register + 1);
+			return;
 
-    case 'W':
-		if(GET_CODE(x) != CONST_INT)
-		{
-			fatal_insn("HIP Internal: Expected a CONST_INT, not this", x);
-		}
-		fprintf(stream, "%d\t", (int) INTVAL(x));
-		fprintf(stream, "#%x\t", (int) (INTVAL(x) & 0xffff));
-		fprintf(stream, "#%x", INTVAL(x));
-		return;
+		case 'r':
+			/* Store the register to output a constant to.  */
+			if(! REG_P (x))
+			fatal_insn ("HIP Internal: Expected a register, not this", x);
+			hip_output_destination_register = HIP_OUTPUT_REGNO (regno);
+			return;
 
-    case 0:
-      /* Nothing to do.  */
-      break;
+		case 'I':
+			/* Output the constant.  Note that we use this for floats as well.  */
+			if(GET_CODE (x) != CONST_INT
+					&& (GET_CODE (x) != CONST_DOUBLE
+							|| (GET_MODE (x) != VOIDmode && GET_MODE (x) !=DFmode
+			  && GET_MODE (x) != SFmode)))
+		fatal_insn ("HIP Internal: Expected a constant, not this", x);
+		  hip_output_register_setting (stream,
+						hip_output_destination_register,
+						hip_intval (x), 0);
+		  return;
 
-    default:
-      /* Presumably there's a missing case above if we get here.  */
-      internal_error ("HIP Internal: Missing %qc case in hip_print_operand", code);
+		case 'U':
+			/* An U for unsigned, if TARGET_ZERO_EXTEND.  Ignore the operand.  */
+			if(TARGET_ZERO_EXTEND)
+				putc ('U', stream);
+			return;
+
+		case 'v':
+			hip_output_shifted_value (stream, (HOST_WIDEST_INT) hip_intval (x));
+			return;
+
+		case 'V':
+			hip_output_shifted_value (stream, (HOST_WIDEST_INT) ~hip_intval (x));
+			return;
+
+		case 'W':
+			if(GET_CODE(x) != CONST_INT)
+			{
+				fatal_insn("HIP Internal: Expected a CONST_INT, not this", x);
+			}
+			fprintf(stream, "%d\t", (int) INTVAL(x));
+			fprintf(stream, "#%x\t", (int) (INTVAL(x) & 0xffff));
+			fprintf(stream, "#%x", INTVAL(x));
+			return;
+
+		case 0:
+		  /* Nothing to do.  */
+		  break;
+
+		default:
+		  /* Presumably there's a missing case above if we get here.  */
+		  internal_error ("HIP Internal: Missing %qc case in hip_print_operand", code);
     }
 
 	switch (GET_CODE (modified_x) )
@@ -1896,6 +1891,9 @@ int hip_print_operand_punct_valid_p(int code ATTRIBUTE_UNUSED)
 void hip_print_operand_address(FILE *stream, rtx x)
 {
 	HIP_FUNCTION_ENTRY();
+
+	warning(0, "hip_print_operand_address: %d", INTVAL(x));
+
 	if(REG_P (x))
 	{
 		/* I find the generated assembly code harder to read without
@@ -2001,12 +1999,13 @@ void hip_asm_output_addr_vec_elt(FILE *stream, int value)
 
 /*
 	ASM_OUTPUT_SKIP.
-	TODO: Need to change.
+	Output to the stdio stream stream an assembler instruction to advance the location counter
+	by nbytes bytes. Those bytes should be zero when loaded.
 */
 void hip_asm_output_skip(FILE *stream, int nbytes)
 {
 	HIP_FUNCTION_ENTRY();
-	fprintf(stream, "\tLOC @+%d\n", nbytes);
+	fprintf(stream, "\t.space %d\t# hip_asm_output_skip DELA\n", nbytes);
 
 }
 
@@ -2025,6 +2024,7 @@ void hip_asm_output_align(FILE *stream, int power)
 	 copy-pasting assembly into hipal.  */
 	/*fprintf(stream, "\t.p2align %d\n", power);
 	fprintf(stream, "\tLOC @+(%d-@)&%d\n", 1 << power, (1 << power) - 1);*/
+	fprintf(stream, "\t.space %d\t# hip_asm_output_align\n", power);
 
 }
 
@@ -2156,9 +2156,9 @@ void hip_expand_prologue(void)
 
 			/* These registers aren't actually saved (as in "will be
 			 restored"), so don't tell DWARF2 they're saved.  */
-			emit_move_insn(gen_rtx_MEM(DImode, plus_constant(stack_pointer_rtx,
+			emit_move_insn(gen_rtx_MEM(SImode, plus_constant(stack_pointer_rtx,
 			offset)),
-			gen_rtx_REG (DImode, regno));
+			gen_rtx_REG(SImode, regno));
 			offset -= UNITS_PER_WORD;
 		}
 	}
@@ -2183,11 +2183,11 @@ void hip_expand_prologue(void)
 		}
 
 		insn = emit_move_insn(
-				gen_rtx_MEM(DImode, plus_constant(stack_pointer_rtx,
+				gen_rtx_MEM(SImode, plus_constant(stack_pointer_rtx,
 				offset)),
 				hard_frame_pointer_rtx);
 		RTX_FRAME_RELATED_P (insn) = 1;
-		insn = emit_insn(gen_adddi3(hard_frame_pointer_rtx,
+		insn = emit_insn(gen_addsi3(hard_frame_pointer_rtx,
 		stack_pointer_rtx,
 		GEN_INT (offset + UNITS_PER_WORD)));
 		RTX_FRAME_RELATED_P (insn) = 1;
@@ -2216,9 +2216,9 @@ void hip_expand_prologue(void)
 			stack_space_to_allocate -= stack_chunk;
 		}
 
-		tmpreg = gen_rtx_REG(DImode, 31);
-		/*retreg = gen_rtx_REG (DImode, HIP_rJ_REGNUM);*/
-		retreg = gen_rtx_REG(DImode, 22);
+		tmpreg = gen_rtx_REG(SImode, 31);
+		/*retreg = gen_rtx_REG(SImode, HIP_rJ_REGNUM);*/
+		retreg = gen_rtx_REG(SImode, 22);
 
 		/* Dwarf2 code is confused by the use of a temporary register for
 		 storing the return address, so we have to express it as a note,
@@ -2226,13 +2226,13 @@ void hip_expand_prologue(void)
 		emit_move_insn(tmpreg, retreg);
 
 		insn = emit_move_insn(
-				gen_rtx_MEM(DImode, plus_constant(stack_pointer_rtx,
+				gen_rtx_MEM(SImode, plus_constant(stack_pointer_rtx,
 				offset)),
 				tmpreg);
 		RTX_FRAME_RELATED_P (insn) = 1;
 		add_reg_note(insn, REG_FRAME_RELATED_EXPR,
 				gen_rtx_SET(VOIDmode,
-						gen_rtx_MEM(DImode, plus_constant(stack_pointer_rtx,
+						gen_rtx_MEM(SImode, plus_constant(stack_pointer_rtx,
 						offset)),
 						retreg));
 
@@ -2268,11 +2268,11 @@ void hip_expand_prologue(void)
 		 and unwind it at eh_return (preferred) or at the landing pad.
 		 Then saves to r0..rG-1 could be specified through that register.  */
 
-		/*emit_move_insn (gen_rtx_REG (DImode, 31),
-		 gen_rtx_REG (DImode,
+		/*emit_move_insn (gen_rtx_REG(SImode, 31),
+		 gen_rtx_REG(SImode,
 		 HIP_rO_REGNUM));*/
-		emit_move_insn(gen_rtx_MEM(DImode, plus_constant(stack_pointer_rtx, offset) ),
-		gen_rtx_REG (DImode, 31));
+		emit_move_insn(gen_rtx_MEM(SImode, plus_constant(stack_pointer_rtx, offset) ),
+		gen_rtx_REG(SImode, 31));
 		offset -= UNITS_PER_WORD;
 	}
 
@@ -2302,10 +2302,10 @@ void hip_expand_prologue(void)
 				stack_space_to_allocate -= stack_chunk;
 			}
 
-			insn = emit_move_insn (gen_rtx_MEM (DImode,
+			insn = emit_move_insn (gen_rtx_MEM(SImode,
 					plus_constant (stack_pointer_rtx,
 							offset)),
-			gen_rtx_REG (DImode, regno));
+			gen_rtx_REG(SImode, regno));
 			RTX_FRAME_RELATED_P (insn) = 1;
 			offset -= UNITS_PER_WORD;
 		}
@@ -2368,8 +2368,8 @@ void hip_expand_epilogue(void)
 				offset = 0;
 			}
 
-			emit_move_insn (gen_rtx_REG (DImode, regno),
-			gen_rtx_MEM (DImode,
+			emit_move_insn (gen_rtx_REG(SImode, regno),
+			gen_rtx_MEM(SImode,
 					plus_constant (stack_pointer_rtx,
 							offset)));
 			offset += UNITS_PER_WORD;
@@ -2401,7 +2401,7 @@ void hip_expand_epilogue(void)
 		}
 
 		emit_move_insn(hard_frame_pointer_rtx,
-		gen_rtx_MEM (DImode,
+		gen_rtx_MEM(SImode,
 				plus_constant (stack_pointer_rtx,
 						offset)));
 		offset += UNITS_PER_WORD;
@@ -2416,8 +2416,8 @@ void hip_expand_epilogue(void)
 		/* Adjust the (normal) stack-pointer to that of the receiver.
 		 FIXME: It would be nice if we could also adjust the register stack
 		 here, but we need to express it through DWARF 2 too.  */
-		emit_insn(gen_adddi3(stack_pointer_rtx, stack_pointer_rtx,
-		gen_rtx_REG (DImode,
+		emit_insn(gen_addsi3(stack_pointer_rtx, stack_pointer_rtx,
+		gen_rtx_REG(SImode,
 				HIP_EH_RETURN_STACKADJ_REGNUM)));
 	}
 
@@ -2542,6 +2542,8 @@ int hip_shiftable_wyde_value(unsigned HOST_WIDEST_INT value)
 	int i;
 	int has_candidate = 0;
 
+	warning(0, "hip_shiftable_wyde_value: %d", value);
+
 	for (i = 0; i < 4; i++)
 	{
 		if(value & 65535)
@@ -2586,7 +2588,7 @@ static void hip_emit_sp_add(HOST_WIDE_INT offset)
 		if(offset > -31)
 		{
 			insn = emit_insn(
-				gen_adddi3(
+				gen_addsi3(
 				stack_pointer_rtx, stack_pointer_rtx, GEN_INT (offset)
 				)
 			);
@@ -2594,10 +2596,10 @@ static void hip_emit_sp_add(HOST_WIDE_INT offset)
 		else
 		{
 			HIP_WARNING("Offset is smaller than 31");
-			rtx tmpr = gen_rtx_REG(DImode, 31);
+			rtx tmpr = gen_rtx_REG(SImode, 31);
 			RTX_FRAME_RELATED_P( emit_move_insn(tmpr, GEN_INT(offset)) ) = 1;
 			insn = emit_insn(
-				gen_adddi3(stack_pointer_rtx, stack_pointer_rtx, tmpr)
+				gen_addsi3(stack_pointer_rtx, stack_pointer_rtx, tmpr)
 			);
 		}
 		RTX_FRAME_RELATED_P (insn) = 1;
@@ -2606,18 +2608,18 @@ static void hip_emit_sp_add(HOST_WIDE_INT offset)
 	{
 		/* Positive adjustments are in the epilogue only.  Don't mark them
 		 as "frame-related" for unwind info.  */
-		if(CONST_OK_FOR_LETTER_P(offset, 'P'))
+		if(CONST_OK_FOR_LETTER_P(offset, 'I'))
 		{
 			emit_insn(
-				gen_adddi3(stack_pointer_rtx, stack_pointer_rtx, GEN_INT(offset))
+				gen_addsi3(stack_pointer_rtx, stack_pointer_rtx, GEN_INT(offset))
 			);
 		}
 		else
 		{
-			HIP_WARNING("Offset is not OK for letter P");
-			rtx tmpr = gen_rtx_REG(DImode, 31);
+			HIP_WARNING("Offset is not OK for letter I");
+			rtx tmpr = gen_rtx_REG(SImode, 31);
 			emit_move_insn(tmpr, GEN_INT (offset));
-			insn = emit_insn(gen_adddi3 (stack_pointer_rtx, stack_pointer_rtx, tmpr));
+			insn = emit_insn(gen_addsi3 (stack_pointer_rtx, stack_pointer_rtx, tmpr));
 		}
 	}
 
