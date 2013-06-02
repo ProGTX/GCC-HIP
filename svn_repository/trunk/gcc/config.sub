@@ -1557,7 +1557,7 @@ case $basic_machine in
 	*-ibm)
 		os=-aix
 		;;
-    	*-knuth)
+    *-knuth)
 		os=-mmixware
 		;;
 	*-wec)

@@ -3348,13 +3348,9 @@ rtx
 emit_move_insn (rtx x, rtx y)
 {
   enum machine_mode mode = GET_MODE (x);
-  enum machine_mode modeY = GET_MODE (y);
   rtx y_cst = NULL_RTX;
   rtx last_insn, set;
 
-	warning(0, "emit_move_insn");
-	debug_rtx(x);
-	debug_rtx(y);
   gcc_assert(mode != BLKmode && (GET_MODE (y) == mode || GET_MODE (y) == VOIDmode));
 
   if (CONSTANT_P (y))

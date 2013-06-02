@@ -3,3 +3,5 @@ build-gcc-hip/
 *.lnk
 *.out
 build-gcc.sh
+install-gcc.sh
+build-gcc-fast.sh

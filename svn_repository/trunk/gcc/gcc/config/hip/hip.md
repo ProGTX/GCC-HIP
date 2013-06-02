@@ -1,834 +1,585 @@
-; GCC machine description for HIP
-; Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2010
-; Free Software Foundation, Inc.
-; Contributed by Hans-Peter Nilsson (hp@bitrange.com)
+;; Machine description for HIP
+;; Copyright (C) 2009 Free Software Foundation, Inc.
+;; Contributed by Anthony Green <green@hiplogic.com>
 
-; This file is part of GCC.
+;; This file is part of GCC.
 
-; GCC is free software; you can redistribute it and/or modify
-; it under the terms of the GNU General Public License as published by
-; the Free Software Foundation; either version 3, or (at your option)
-; any later version.
+;; GCC is free software; you can redistribute it and/or modify it
+;; under the terms of the GNU General Public License as published
+;; by the Free Software Foundation; either version 3, or (at your
+;; option) any later version.
 
-; GCC is distributed in the hope that it will be useful,
-; but WITHOUT ANY WARRANTY; without even the implied warranty of
-; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the
-; GNU General Public License for more details.
+;; GCC is distributed in the hope that it will be useful, but WITHOUT
+;; ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+;; or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General Public
+;; License for more details.
 
-; You should have received a copy of the GNU General Public License
-; along with GCC; see the file COPYING3.	If not see
-; <http://www.gnu.org/licenses/>.
+;; You should have received a copy of the GNU General Public License
+;; along with GCC; see the file COPYING3.	If not see
+;; <http://www.gnu.org/licenses/>.
 
-; See file "rtl.def" for documentation on define_insn, match_*, et al.
+;; -------------------------------------------------------------------------
+;; HIP specific constraints, predicates and attributes
+;; -------------------------------------------------------------------------
 
-
-
-
-
-
-(define_constants
-	[(HIP_rJ_REGNUM 20)
-	(HIP_rR_REGNUM 20)
-	(HIP_fp_rO_OFFSET -24)]
-)
-
-; Operand and operator predicates.
-
+(include "constraints.md")
 (include "predicates.md")
 
-; FIXME: Can we remove the reg-to-reg for smaller modes?	Shouldn't they
-; be synthesized ok?
-(define_insn "movqi"
-	[(set
-		(match_operand:QI 0 "nonimmediate_operand" "=r,r ,r,x ,r,r,m,??r")
-		(match_operand:QI 1 "general_operand"			"r,LS,K,rI,x,m,r,n")
-	)]
-	""
-	"@
-	SET %0,%1
-	%s1 %0,%v1
-	NEGU %0,0,%n1
-	PUT %0,%1
-	GET %0,%1
-	LDB%U0 %0,%1
-	STBU %1,%0
-	%r0%I1"
-)
-
-(define_insn "movhi"
-	[(set (match_operand:HI 0 "nonimmediate_operand" "=r,r ,r ,x,r,r,m,??r")
-	(match_operand:HI 1 "general_operand"			"r,LS,K,r,x,m,r,n"))]
-	""
-	"@
-	SET %0,%1
-	%s1 %0,%v1
-	NEGU %0,0,%n1
-	PUT %0,%1
-	GET %0,%1
-	LDW%U0 %0,%1
-	STWU %1,%0
-	%r0%I1")
-
-; gcc.c-torture/compile/920428-2.c fails if there's no "n".
-(define_insn "movsi"
-	[(set (match_operand:SI 0 "nonimmediate_operand" "=r,r ,r,x,r,r,m,??r")
-	(match_operand:SI 1 "general_operand"			"r,LS,K,r,x,m,r,n"))]
-	""
-	"@
-	SET %0,%1
-	%s1 %0,%v1
-	NEGU %0,0,%n1
-	PUT %0,%1
-	GET %0,%1
-	LDT%U0 %0,%1
-	STTU %1,%0
-	%r0%I1")
-
-; We assume all "s" are addresses.	Does that hold?
-(define_insn "movdi"
-	[(set (match_operand:DI 0 "nonimmediate_operand" "=r,r ,r,x,r,m,r,m,r,r,??r")
-	(match_operand:DI 1 "general_operand"			"r,LS,K,r,x,I,m,r,R,s,n"))]
-	""
-	"@
-	SET %0,%1
-	%s1 %0,%v1
-	NEGU %0,0,%n1
-	PUT %0,%1
-	GET %0,%1
-	STCO %1,%0
-	LDO %0,%1
-	STOU %1,%0
-	GETA %0,%1
-	LDA %0,%1
-	%r0%I1")
-
-; We need to be able to move around the values used as condition codes.
-; First spotted as reported in
-; <URL:http://gcc.gnu.org/ml/gcc-bugs/2003-03/msg00008.html> due to
-; changes in loop optimization.	The file machmode.def says they're of
-; size 4 QI.	Valid bit-patterns correspond to integers -1, 0 and 1, so
-; we treat them as signed entities; see hip-modes.def.	The following
-; expanders should cover all MODE_CC modes, and expand for this pattern.
-(define_insn "*movcc_expanded"
-	[(set (match_operand 0 "nonimmediate_operand" "=r,x,r,r,m")
-	(match_operand 1 "nonimmediate_operand"	"r,r,x,m,r"))]
-	"GET_MODE_CLASS (GET_MODE (operands[0])) == MODE_CC
-	&& GET_MODE_CLASS (GET_MODE (operands[1])) == MODE_CC"
-	"@
-	SET %0,%1
-	PUT %0,%1
-	GET %0,%1
-	LDT %0,%1
-	STT %1,%0")
-
-(define_expand "movcc"
-	[(set (match_operand:CC 0 "nonimmediate_operand" "")
-	(match_operand:CC 1 "nonimmediate_operand" ""))]
-	""
-	"")
-
-(define_expand "movcc_uns"
-	[(set (match_operand:CC_UNS 0 "nonimmediate_operand" "")
-	(match_operand:CC_UNS 1 "nonimmediate_operand" ""))]
-	""
-	"")
-
-(define_expand "movcc_fpeq"
-	[(set (match_operand:CC_FPEQ 0 "nonimmediate_operand" "")
-	(match_operand:CC_FPEQ 1 "nonimmediate_operand" ""))]
-	""
-	"")
-
-(define_expand "movcc_fun"
-	[(set (match_operand:CC_FUN 0 "nonimmediate_operand" "")
-	(match_operand:CC_FUN 1 "nonimmediate_operand" ""))]
-	""
-	"")
-
-(define_insn "addsi3"
-	[(set
-		(match_operand:SI 0 "register_operand"	"=r, =r")
-		(plus:SI
-			(match_operand:SI 1 "register_operand"				"r, %r")
-			(match_operand:SI 2 "hip_reg_or_constant_operand"	"r, rI")
-		)
-	)]
-	""
-	"@
-	add %0,%1,%2
-	addi %0,%1,%n2"
-)
-
-; FIXME:	When TImode works for other reasons (like cross-compiling from
-; a 32-bit host), add back umulditi3 and umuldi3_highpart here.
-
-; FIXME: Check what's really reasonable for the mod part.
-
-; One day we might persuade GCC to expand divisions with constants the
-; way HIP does; giving the remainder the sign of the divisor.	But even
-; then, it might be good to have an option to divide the way "everybody
-; else" does.	Perhaps then, this option can be on by default.	However,
-; it's not likely to happen because major (C, C++, Fortran) language
-; standards in effect at 2002-04-29 reportedly demand that the sign of
-; the remainder must follow the sign of the dividend.
-
-(define_expand "divdi3"
-	[(parallel
-		[(set (match_operand:SI 0 "register_operand" "=&r")
-		(div:SI (match_operand:SI 1 "register_operand" "r")
-			(match_operand:SI 2 "register_operand" "r")))
-		(clobber (scratch:SI))
-		(clobber (scratch:SI))
-		(clobber (reg:SI HIP_rR_REGNUM))
-	])]
-	"! TARGET_KODEK_DIVISION"
-	"")
-
-(define_expand "moddi3"
-	[(parallel
-		[(set (match_operand:SI 0 "register_operand" "=&r")
-		(mod:SI (match_operand:SI 1 "register_operand" "r")
-			(match_operand:SI 2 "register_operand" "r")))
-		(clobber (scratch:SI))
-		(clobber (scratch:SI))
-		(clobber (reg:SI HIP_rR_REGNUM))
-	])]
-	"! TARGET_KODEK_DIVISION"
-	"")
-
-; The %2-is-%1-case is there just to make sure things don't fail.	Could
-; presumably happen with optimizations off; no evidence.
-(define_insn "*moddi3_nonkodek"
-	[(set (match_operand:SI 0 "register_operand" "=&r,&r")
-	(mod:SI (match_operand:SI 1 "register_operand" "r,r")
-		(match_operand:SI 2 "register_operand" "1,r")))
-	(clobber (match_scratch:SI 3 "=1,1"))
-	(clobber (match_scratch:SI 4 "=2,2"))
-	(clobber (reg:SI HIP_rR_REGNUM))
-	]
-	"! TARGET_KODEK_DIVISION"
-	"@
-	SETL %0,0
-	NEGU %0,0,%2\;CSN %2,%2,%0\;NEGU r20,0,%1\;CSN %1,%1,r20\;\
-SIVU %1,%1,%2\;GET %0,:rR\;NEGU %2,0,%0\;CSNN %0,r20,%2")
-
-(define_insn "ashldi3"
-	[(set (match_operand:SI 0 "register_operand" "=r")
-	(ashift:SI
-		(match_operand:SI 1 "register_operand" "r")
-		(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI")))]
-	""
-	"SLU %0,%1,%2")
-
-(define_insn "ashrdi3"
-	[(set (match_operand:SI 0 "register_operand" "=r")
-	(ashiftrt:SI
-		(match_operand:SI 1 "register_operand" "r")
-		(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI")))]
-	""
-	"SR %0,%1,%2")
-
-(define_insn "lshrdi3"
-	[(set (match_operand:SI 0 "register_operand" "=r")
-	(lshiftrt:SI
-		(match_operand:SI 1 "register_operand" "r")
-		(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI")))]
-	""
-	"SRU %0,%1,%2")
-
-(define_insn "negdi2"
-	[(set (match_operand:SI 0 "register_operand" "=r")
-	(neg:SI (match_operand:SI 1 "register_operand" "r")))]
-	""
-	"NEGU %0,0,%1")
-
-(define_expand "negdf2"
-	[(parallel [(set (match_operand:DF 0 "register_operand" "=r")
-							(neg:DF (match_operand:DF 1 "register_operand" "r")))
-					(use (match_dup 2))])]
-	""
-{
-	/* Emit bit-flipping sequence to be IEEE-safe wrt. -+0.	*/
-	/*operands[2] = force_reg (SImode, GEN_INT ((HOST_WIDE_INT) 1 << 31));*/
-})
-
-(define_insn "*expanded_negdf2"
-	[(set (match_operand:DF 0 "register_operand" "=r")
-			(neg:DF (match_operand:DF 1 "register_operand" "r")))
-	(use (match_operand:SI 2 "register_operand" "r"))]
-	""
-	"XOR %0,%1,%2")
-
-; FIXME: define_expand for absdi2?
-
-(define_insn "absdf2"
-	[(set (match_operand:DF 0 "register_operand" "=r")
-	(abs:DF (match_operand:DF 1 "register_operand" "0")))]
-	""
-	"ANDNH %0,#8000")
-
-; FIXME: define_expand for ffssi2? (not ffsdi2 since int is SImode).
-
-(define_insn "one_cmpldi2"
-	[(set (match_operand:SI 0 "register_operand" "=r")
-	(not:SI (match_operand:SI 1 "register_operand" "r")))]
-	""
-	"NOR %0,%1,0")
-
-; When the user-patterns expand, the resulting insns will match the
-; patterns below.
-
-; We can fold the signed-compare where the register value is
-; already equal to (compare:CCTYPE (reg) (const_int 0)).
-;	We can't do that at all for floating-point, due to NaN, +0.0
-; and -0.0, and we can only do it for the non/zero test of
-; unsigned, so that has to be done another way.
-;	FIXME: Perhaps a peep2 changing CCcode to a new code, that
-; gets folded here.
-(define_insn "*cmpdi_folded"
-	[(set (match_operand:CC 0 "register_operand" "=r")
-	(compare:CC
-		(match_operand:SI 1 "register_operand" "r")
-		(const_int 0)))]
-	; FIXME: Can we test equivalence any other way?
-	; FIXME: Can we fold any other way?
-	"REG_P (operands[0]) && REG_P (operands[1])
-	&& REGNO (operands[1]) == REGNO (operands[0])"
-	"%% folded: cmp %0,%1,0")
-
-(define_insn "*cmps"
-	[(set (match_operand:CC 0 "register_operand" "=r")
-	(compare:CC
-		(match_operand:SI 1 "register_operand" "r")
-		(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI")))]
-	""
-	"CMP %0,%1,%2")
-
-(define_insn "*cmpu"
-	[(set (match_operand:CC_UNS 0 "register_operand" "=r")
-	(compare:CC_UNS
-		(match_operand:SI 1 "register_operand" "r")
-		(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI")))]
-	""
-	"CMPU %0,%1,%2")
-
-
-; Neither sign-extend nor zero-extend are necessary; gcc knows how to
-; synthesize using shifts or and, except with a memory source and not
-; completely optimal.	FIXME: Actually, other bugs surface when those
-; patterns are defined; fix later.
-
-; There are no sane values with the bit-patterns of (int) 0..255 except
-; 0 to use in movdfcc.
-
-(define_expand "movdfcc"
-	[(set (match_dup 4) (match_dup 5))
-	(set (match_operand:DF 0 "register_operand" "")
-	(if_then_else:DF
-		(match_operand 1 "comparison_operator" "")
-		(match_operand:DF 2 "hip_reg_or_0_operand" "")
-		(match_operand:DF 3 "hip_reg_or_0_operand" "")))]
-	""
-	"
-{
-/*
-	enum rtx_code code = GET_CODE (operands[1]);
-	if (code == LE || code == GE)
-		FAIL;
-
-	operands[4] = hip_gen_compare_reg (code, XEXP (operands[1], 0),
-						XEXP (operands[1], 1));
-	operands[5] = gen_rtx_COMPARE (GET_MODE (operands[4]),
-					XEXP (operands[1], 0),
-					XEXP (operands[1], 1));
-	operands[1] = gen_rtx_fmt_ee (code, VOIDmode, operands[4], const0_rtx);
-*/}")
-
-(define_expand "movdicc"
-	[(set (match_dup 4) (match_dup 5))
-	(set (match_operand:SI 0 "register_operand" "")
-	(if_then_else:SI
-		(match_operand 1 "comparison_operator" "")
-		(match_operand:SI 2 "hip_reg_or_8bit_operand" "")
-		(match_operand:SI 3 "hip_reg_or_8bit_operand" "")))]
-	""
-	"
-{/*
-	enum rtx_code code = GET_CODE (operands[1]);
-	if (code == LE || code == GE)
-		FAIL;
-
-	operands[4] = hip_gen_compare_reg (code, XEXP (operands[1], 0),
-						XEXP (operands[1], 1));
-	operands[5] = gen_rtx_COMPARE (GET_MODE (operands[4]),
-					XEXP (operands[1], 0),
-					XEXP (operands[1], 1));
-	operands[1] = gen_rtx_fmt_ee (code, VOIDmode, operands[4], const0_rtx);
-*/}")
-
-; FIXME: Is this the right way to do "folding" of CCmode -> SImode?
-(define_insn "*movdicc_real_foldable"
-	[(set (match_operand:SI 0 "register_operand" "=r,r,r,r")
-	(if_then_else:SI
-		(match_operator 2 "hip_foldable_comparison_operator"
-				[(match_operand:SI 3 "register_operand" "r,r,r,r")
-				(const_int 0)])
-		(match_operand:SI 1 "hip_reg_or_8bit_operand" "rI,0 ,rI,GM")
-		(match_operand:SI 4 "hip_reg_or_8bit_operand" "0 ,rI,GM,rI")))]
-	""
-	"@
-	CS%d2 %0,%3,%1
-	CS%D2 %0,%3,%4
-	ZS%d2 %0,%3,%1
-	ZS%D2 %0,%3,%4")
-
-(define_insn "*movdicc_real_reversible"
-	[(set
-		(match_operand:SI 0 "register_operand"		"=r ,r ,r ,r")
-		(if_then_else:SI
-		(match_operator
-		2 "hip_comparison_operator"
-		[(match_operand 3 "hip_reg_cc_operand"			"r ,r ,r ,r")
-		(const_int 0)])
-		(match_operand:SI 1 "hip_reg_or_8bit_operand" "rI,0 ,rI,GM")
-		(match_operand:SI 4 "hip_reg_or_8bit_operand" "0 ,rI,GM,rI")))]
-	"REVERSIBLE_CC_MODE (GET_MODE (operands[3]))"
-	"@
-	CS%d2 %0,%3,%1
-	CS%D2 %0,%3,%4
-	ZS%d2 %0,%3,%1
-	ZS%D2 %0,%3,%4")
-
-(define_insn "*movdicc_real_nonreversible"
-	[(set
-		(match_operand:SI 0 "register_operand"		"=r ,r")
-		(if_then_else:SI
-		(match_operator
-		2 "hip_comparison_operator"
-		[(match_operand 3 "hip_reg_cc_operand"			"r ,r")
-		(const_int 0)])
-		(match_operand:SI 1 "hip_reg_or_8bit_operand" "rI,rI")
-		(match_operand:SI 4 "hip_reg_or_0_operand" "0 ,GM")))]
-	"!REVERSIBLE_CC_MODE (GET_MODE (operands[3]))"
-	"@
-	CS%d2 %0,%3,%1
-	ZS%d2 %0,%3,%1")
-
-(define_insn "*movdfcc_real_foldable"
-	[(set
-		(match_operand:DF 0 "register_operand"	"=r	,r	,r	,r")
-		(if_then_else:DF
-		(match_operator
-		2 "hip_foldable_comparison_operator"
-		[(match_operand:SI 3 "register_operand"		"r	,r	,r	,r")
-		(const_int 0)])
-		(match_operand:DF 1 "hip_reg_or_0_operand" "rGM,0	,rGM,GM")
-		(match_operand:DF 4 "hip_reg_or_0_operand" "0	,rGM,GM ,rGM")))]
-	""
-	"@
-	CS%d2 %0,%3,%1
-	CS%D2 %0,%3,%4
-	ZS%d2 %0,%3,%1
-	ZS%D2 %0,%3,%4")
-
-(define_insn "*movdfcc_real_reversible"
-	[(set
-		(match_operand:DF 0 "register_operand"	"=r	,r	,r	,r")
-		(if_then_else:DF
-		(match_operator
-		2 "hip_comparison_operator"
-		[(match_operand 3 "hip_reg_cc_operand"		"r	,r	,r	,r")
-		(const_int 0)])
-		(match_operand:DF 1 "hip_reg_or_0_operand" "rGM,0	,rGM,GM")
-		(match_operand:DF 4 "hip_reg_or_0_operand" "0	,rGM,GM ,rGM")))]
-	"REVERSIBLE_CC_MODE (GET_MODE (operands[3]))"
-	"@
-	CS%d2 %0,%3,%1
-	CS%D2 %0,%3,%4
-	ZS%d2 %0,%3,%1
-	ZS%D2 %0,%3,%4")
-
-(define_insn "*movdfcc_real_nonreversible"
-	[(set
-		(match_operand:DF 0 "register_operand"	"=r	,r")
-		(if_then_else:DF
-		(match_operator
-		2 "hip_comparison_operator"
-		[(match_operand 3 "hip_reg_cc_operand"		"r	,r")
-		(const_int 0)])
-		(match_operand:DF 1 "hip_reg_or_0_operand" "rGM,rGM")
-		(match_operand:DF 4 "hip_reg_or_0_operand" "0	,GM")))]
-	"!REVERSIBLE_CC_MODE (GET_MODE (operands[3]))"
-	"@
-	CS%d2 %0,%3,%1
-	ZS%d2 %0,%3,%1")
-
-; FIXME: scc insns will probably help, I just skip them
-; right now.	Revisit.
-
-(define_expand "cbranchdi4"
-	[(set (match_dup 4)
-			(match_op_dup 5
-			[(match_operand:SI 1 "register_operand" "")
-				(match_operand:SI 2 "hip_reg_or_8bit_operand" "")]))
-	(set (pc)
-			(if_then_else
-					(match_operator 0 "ordered_comparison_operator"
-					[(match_dup 4)
-						(const_int 0)])
-					(label_ref (match_operand 3 "" ""))
-					(pc)))]
-	""
-	"
-{/*
-	operands[4] = hip_gen_compare_reg (GET_CODE (operands[0]),
-													operands[1], operands[2]);
-	operands[5] = gen_rtx_fmt_ee (COMPARE,
-											GET_MODE (operands[4]),
-											operands[1], operands[2]);
-*/}")
-
-
-; FIXME: we can emit an unordered-or-*not*-equal compare in one insn, but
-; there's no RTL code for it.	Maybe revisit in future.
-
-; FIXME: Odd/Even matchers?
-(define_insn "*bCC_foldable"
-	[(set (pc)
-	(if_then_else
-		(match_operator 1 "hip_foldable_comparison_operator"
-				[(match_operand:SI 2 "register_operand" "r")
-				(const_int 0)])
-		(label_ref (match_operand 0 "" ""))
-		(pc)))]
-	""
-	"%+B%d1 %2,%0")
-
-(define_insn "*bCC"
-	[(set (pc)
-	(if_then_else
-		(match_operator 1 "hip_comparison_operator"
-				[(match_operand 2 "hip_reg_cc_operand" "r")
-				(const_int 0)])
-		(label_ref (match_operand 0 "" ""))
-		(pc)))]
-	""
-	"%+B%d1 %2,%0")
-
-(define_insn "*bCC_inverted_foldable"
-	[(set (pc)
-	(if_then_else
-		(match_operator 1 "hip_foldable_comparison_operator"
-				[(match_operand:SI 2 "register_operand" "r")
-				(const_int 0)])
-				(pc)
-				(label_ref (match_operand 0 "" ""))))]
-; REVERSIBLE_CC_MODE is checked by hip_foldable_comparison_operator.
-	""
-	"%+B%D1 %2,%0")
-
-(define_insn "*bCC_inverted"
-	[(set (pc)
-	(if_then_else
-		(match_operator 1 "hip_comparison_operator"
-				[(match_operand 2 "hip_reg_cc_operand" "r")
-				(const_int 0)])
-		(pc)
-		(label_ref (match_operand 0 "" ""))))]
-	"REVERSIBLE_CC_MODE (GET_MODE (operands[2]))"
-	"%+B%D1 %2,%0")
-
-(define_expand "call"
-	[(parallel [(call (match_operand:QI 0 "memory_operand" "")
-				(match_operand 1 "general_operand" ""))
-			(use (match_operand 2 "general_operand" ""))
-			(clobber (match_dup 4))])
-	(set (match_dup 4) (match_dup 3))]
-	""
-	"
-{
-	/* The caller checks that the operand is generally valid as an
-		address, but at -O0 nothing makes sure that it's also a valid
-		call address for a *call*; a hip_symbolic_or_address_operand.
-		Force into a register if it isn't.	*/
-	/*if (!hip_symbolic_or_address_operand (XEXP (operands[0], 0),
-						GET_MODE (XEXP (operands[0], 0))))
-		operands[0]
-		= replace_equiv_address (operands[0],
-						force_reg (Pmode, XEXP (operands[0], 0)));*/
-
-	/* Since the epilogue 'uses' the return address, and it is clobbered
-		in the call, and we set it back after every call (all but one setting
-		will be optimized away), integrity is maintained.	*/
-	/*operands[3]
-		= hip_get_hard_reg_initial_val (Pmode,
-						HIP_INCOMING_RETURN_ADDRESS_REGNUM);*/
-
-	/* FIXME: There's a bug in gcc which causes NULL to be passed as
-		operand[2] when we get out of registers, which later confuses gcc.
-		Work around it by replacing it with const_int 0.	Possibly documentation
-		error too.	*/
-	/*if (operands[2] == NULL_RTX)
-		operands[2] = const0_rtx;
-
-	operands[4] = gen_rtx_REG (SImode, HIP_INCOMING_RETURN_ADDRESS_REGNUM);*/
-}")
-
-(define_expand "call_value"
-	[(parallel [(set (match_operand 0 "" "")
-			(call (match_operand:QI 1 "memory_operand" "")
-				(match_operand 2 "general_operand" "")))
-			(use (match_operand 3 "general_operand" ""))
-			(clobber (match_dup 5))])
-	(set (match_dup 5) (match_dup 4))]
-	""
-	"
-{
-	/* The caller checks that the operand is generally valid as an
-		address, but at -O0 nothing makes sure that it's also a valid
-		call address for a *call*; a hip_symbolic_or_address_operand.
-		Force into a register if it isn't.	*/
-	/*if (!hip_symbolic_or_address_operand (XEXP (operands[1], 0),
-						GET_MODE (XEXP (operands[1], 0))))
-		operands[1]
-		= replace_equiv_address (operands[1],
-						force_reg (Pmode, XEXP (operands[1], 0)));*/
-
-	/* Since the epilogue 'uses' the return address, and it is clobbered
-		in the call, and we set it back after every call (all but one setting
-		will be optimized away), integrity is maintained.	*/
-	/*operands[4]
-		= hip_get_hard_reg_initial_val (Pmode,
-						HIP_INCOMING_RETURN_ADDRESS_REGNUM);*/
-
-	/* FIXME: See 'call'.	*/
- /* if (operands[3] == NULL_RTX)
-		operands[3] = const0_rtx;*/
-
-	/* FIXME: Documentation bug: operands[3] (operands[2] for 'call') is the
-		*next* argument register, not the number of arguments in registers.
-		(There used to be code here where that mattered.)	*/
-
- /* operands[5] = gen_rtx_REG (SImode, HIP_INCOMING_RETURN_ADDRESS_REGNUM);*/
-}")
-
-; Don't use 'p' here.	A 'p' must stand first in constraints, or reload
-; messes up, not registering the address for reload.	Several C++
-; testcases, including g++.brendan/crash40.C.	FIXME: This is arguably a
-; bug in gcc.	Note line ~2612 in reload.c, that does things on the
-; condition <<else if (constraints[i][0] == 'p')>> and the comment on
-; ~3017 that says:
-; <<	case 'p':
-;			/* All necessary reloads for an address_operand
-;				were handled in find_reloads_address.	*/>>
-; Sorry, I have not dug deeper.	If symbolic addresses are used
-; rarely compared to addresses in registers, disparaging the
-; first ("p") alternative by adding ? in the first operand
-; might do the trick.	We define 'U' as a synonym to 'p', but without the
-; caveats (and very small advantages) of 'p'.
-(define_insn "*call_real"
-	[(call (mem:QI
-		(match_operand:SI 0 "hip_symbolic_or_address_operand" "s,rU"))
-		(match_operand 1 "" ""))
-	(use (match_operand 2 "" ""))
-	(clobber (reg:SI HIP_rJ_REGNUM))
-	]
-	""
-	"@
-	PUSHJ r%p2,%0
-	PUSHGO r%p2,%a0")
-
-(define_insn "*call_value_real"
-	[(set (match_operand 0 "register_operand" "=r,r")
-	(call (mem:QI
-				(match_operand:SI 1 "hip_symbolic_or_address_operand" "s,rU"))
-			(match_operand 2 "" "")))
-	(use (match_operand 3 "" ""))
-	(clobber (reg:SI HIP_rJ_REGNUM))
-	]
-	""
-	"@
-	PUSHJ r%p3,%1
-	PUSHGO r%p3,%a1")
-
-; I hope untyped_call and untyped_return are not needed for HIP.
-; Users of Objective-C will notice.
-
-; Generated by GCC.
-(define_expand "return"
-	[(return)]
-	"hip_use_simple_return ()"
-	"")
-
-; Generated by the epilogue expander.
-(define_insn "*expanded_return"
-	[(return)]
-	""
-	"POP %.,0")
-
-(define_expand "prologue"
-	[(const_int 0)]
-	""
-	"hip_expand_prologue (); DONE;")
-
-; Note that the (return) from the expander itself is always the last insn
-; in the epilogue.
-(define_expand "epilogue"
-	[(return)]
-	""
-	"hip_expand_epilogue ();")
+; All instructions are four bytes long.
+(define_attr "length" "" (const_int 4))
+
+;; -------------------------------------------------------------------------
+;; nop instruction
+;; -------------------------------------------------------------------------
 
 (define_insn "nop"
 	[(const_int 0)]
 	""
-	"SWYM 0,0,0")
+	"nop"
+)
 
-(define_insn "jump"
-	[(set (pc) (label_ref (match_operand 0 "" "")))]
+;; -------------------------------------------------------------------------
+;; Arithmetic instructions
+;; -------------------------------------------------------------------------
+
+(define_insn "addsi3"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r, r, r")
+		(plus:SI
+			(match_operand:SI 1 "register_operand"		"r, r, r")
+			(match_operand:SI 2 "hip_offset_operand"	"I, N, r")
+		)
+	)]
 	""
-	"JMP %0")
+	"@
+	addi	%0, %1, %2
+	subi	%0, %1, -%2
+	add		%0, %1, %2"
+)
+
+(define_insn "subsi3"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r, r")
+		(minus:SI
+			(match_operand:SI 1 "register_operand"		"r, r")
+			(match_operand:SI 2 "hip_offset_operand"	"I, r")
+		)
+	)]
+	""
+	"@
+	subi	%0, %1, %2
+	sub		%0, %1, %2"
+)
+
+;(define_insn "mulsi3"
+;	[(set
+;		(match_operand:SI 0 "register_operand" "=r")
+;		(mult:SI
+;			(match_operand:SI 1 "register_operand" "0")
+;			(match_operand:SI 2 "register_operand" "r")
+;		)
+;	)]
+;	""
+;	"mul.l	%0, %2")
+
+;(define_insn "divsi3"
+;	[(set
+;		(match_operand:SI 0 "register_operand" "=r")
+;		(div:SI
+;	 	(match_operand:SI 1 "register_operand" "0")
+;	 	(match_operand:SI 2 "register_operand" "r"))
+;	)]
+;	""
+;	"div.l	%0, %2")
+
+;(define_insn "udivsi3"
+;	[(set
+;		(match_operand:SI 0 "register_operand" "=r")
+;		(udiv:SI
+;	 	(match_operand:SI 1 "register_operand" "0")
+;	 	(match_operand:SI 2 "register_operand" "r"))
+;	)]
+;	""
+;	"udiv.l %0, %2")
+
+;(define_insn "modsi3"
+;	[(set
+;		(match_operand:SI 0 "register_operand" "=r")
+;		(mod:SI
+;	 	(match_operand:SI 1 "register_operand" "0")
+;	 	(match_operand:SI 2 "register_operand" "r"))
+;	)]
+;	""
+;	"mod.l	%0, %2")
+
+;(define_insn "umodsi3"
+;	[(set
+;		(match_operand:SI 0 "register_operand" "=r")
+;		(umod:SI
+;	 	(match_operand:SI 1 "register_operand" "0")
+;	 	(match_operand:SI 2 "register_operand" "r"))
+;	)]
+;	""
+;	"umod.l %0, %2")
+
+;; -------------------------------------------------------------------------
+;; Unary arithmetic instructions
+;; -------------------------------------------------------------------------
+
+(define_insn "negsi2"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r")
+		(neg:SI (match_operand:SI 1 "register_operand" "r"))
+	)]
+	""
+	"sub	%0, r0, %1"
+)
+
+(define_insn "one_cmplsi2"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r")
+		(not:SI (match_operand:SI 1 "register_operand" "r"))
+	)]
+	""
+	"not	%0, %1"
+)
+
+;; -------------------------------------------------------------------------
+;; Logical operators
+;; -------------------------------------------------------------------------
+
+(define_insn "andsi3"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r, r")
+		(and:SI
+			(match_operand:SI 1 "register_operand" "r, r")
+			(match_operand:SI 2 "register_operand" "I, r")
+		)
+	)]
+	""
+	"@
+	andi	%0, %1, %2
+	and		%0, %1, %2"
+)
+
+(define_insn "xorsi3"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r, r")
+		(xor:SI
+			(match_operand:SI 1 "register_operand" "r, r")
+			(match_operand:SI 2 "register_operand" "I, r")
+		)
+	)]
+	""
+	"@
+	xori	%0, %1, %2
+	xor		%0, %1, %2"
+)
+
+(define_insn "iorsi3"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r, r")
+		(ior:SI
+			(match_operand:SI 1 "register_operand" "r, r")
+			(match_operand:SI 2 "register_operand" "I, r")
+		)
+	)]
+	""
+	"@
+	ori		%0, %1, %2
+	or		%0, %1, %2"
+)
+
+;; -------------------------------------------------------------------------
+;; Shifters
+;; -------------------------------------------------------------------------
+
+(define_insn "lshlsi3"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r, r")
+		(ashift:SI
+			(match_operand:SI 1 "register_operand" "r, r")
+			(match_operand:SI 2 "register_operand" "I, r")
+		)
+	)]
+	""
+	"@
+	slli	%0, %1, %2
+	sll		%0, %1, %2"
+)
+
+(define_insn "ashrsi3"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r, r")
+		(ashiftrt:SI
+			(match_operand:SI 1 "register_operand" "r, r")
+			(match_operand:SI 2 "register_operand" "I, r")
+		)
+	)]
+	""
+	"@
+	srai	%0, %1, %2
+	sra		%0, %1, %2"
+)
+
+(define_insn "lshrsi3"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r, r")
+		(lshiftrt:SI
+			(match_operand:SI 1 "register_operand" "r, r")
+			(match_operand:SI 2 "register_operand" "I, r")
+		)
+	)]
+	""
+	"@
+	srli	%0, %1, %2
+	srl		%0, %1, %2"
+)
+
+;; -------------------------------------------------------------------------
+;; Move instructions
+;; -------------------------------------------------------------------------
+
+;; SImode
+
+;; Push a register onto the stack
+(define_insn "movsi_push"
+	[(set
+		(mem:SI (pre_dec:SI (reg:SI 1)))
+		(match_operand:SI 0 "register_operand" "r")
+	)]
+	""
+	"sw 0(r30), %0"
+)
+
+;; Pop a register from the stack
+(define_insn "movsi_pop"
+	[(set
+		(match_operand:SI 1 "register_operand" "=r")
+		(mem:SI (post_inc:SI (match_operand:SI 0 "register_operand" "r")))
+	)]
+	""
+	"lw %0, 0(r30)"
+)
+
+(define_expand "movsi"
+	[(set
+		(match_operand:SI 0 "general_operand" "")
+		(match_operand:SI 1 "general_operand" "")
+	)]
+	 ""
+{
+	/* If this is a store, force the value into a register.	*/
+	if(!(reload_in_progress || reload_completed))
+	{
+		if(MEM_P(operands[0]))
+		{
+			operands[1] = force_reg(SImode, operands[1]);
+			if(MEM_P(XEXP(operands[0], 0)))
+				operands[0] = gen_rtx_MEM(SImode, force_reg (SImode, XEXP (operands[0], 0)));
+		}
+		else if(MEM_P(operands[1]) && MEM_P(XEXP (operands[1], 0)))
+		{
+			operands[1] = gen_rtx_MEM(SImode, force_reg(SImode, XEXP(operands[1], 0)));
+		}
+	}
+}
+)
+
+(define_insn "*movsi"
+	[(set
+		(match_operand:SI 0 "general_operand"				"=r,r, r, W, r, A, r, B, r")
+		(match_operand:SI 1 "hip_general_movsrc_operand"	"O, r, i, r, W, r, A, r, B")
+	)]
+	"	register_operand(operands[0], SImode) ||
+		register_operand(operands[1], SImode)"
+	"@
+	 add		%0, r0, r0
+	 add		%0, r0, %1
+	 addui		%0, r0, %1
+	 swW		%0, %1
+	 lwW		%0, %1
+	 swA		%0(r0), %1
+	 lwA		%0, %1(r0)
+	 swB		%0, %1
+	 lwB		%0, 0(%1)"
+	[(set_attr "length"	"4,4,4,4,4,4,4,4,4")]
+)
+
+(define_expand "movqi"
+	[(set
+		(match_operand:QI 0 "general_operand" "")
+		(match_operand:QI 1 "general_operand" "")
+	)]
+	""
+{
+	/* If this is a store, force the value into a register.	*/
+	if(MEM_P(operands[0]))
+		operands[1] = force_reg(QImode, operands[1]);
+}
+)
+
+(define_insn "*movqi"
+	[(set
+		(match_operand:QI 0 "general_operand"				"=r,r, r, W, r, A, r, B, r")
+		(match_operand:QI 1 "hip_general_movsrc_operand"	"O, r, i, r, W, r, A, r, B")
+	)]
+	"	register_operand(operands[0], QImode) ||
+		register_operand(operands[1], QImode)"
+	"@
+	 add		%0, r0, r0
+	 add		%0, %1, r0
+	 addui		%0, r0, %1
+	 sb		0(%0), %1
+	 lb		%0, 0(%1)
+	 sb		%0(r0), %1
+	 lb		%0, %1(r0)
+	 sb		0(%0), %1
+	 lb		%0, 0(%1)"
+	[(set_attr "length"	"4,4,4,4,4,4,4,4,4")]
+)
+
+(define_expand "movhi"
+	[(set
+		(match_operand:HI 0 "general_operand" "")
+		(match_operand:HI 1 "general_operand" "")
+	)]
+	""
+{
+	/* If this is a store, force the value into a register.	*/
+	if(MEM_P (operands[0]))
+		operands[1] = force_reg(HImode, operands[1]);
+}
+)
+
+(define_insn "*movhi"
+	[(set
+		(match_operand:HI 0 "general_operand"				"=r,r, r, W, r, A, r, B, r")
+		(match_operand:HI 1 "hip_general_movsrc_operand"	"O, r, i, r, W, r, A, r, B")
+	)]
+	"	register_operand(operands[0], HImode) ||
+		register_operand(operands[1], HImode)"
+	"@
+	 add		%0, r0, r0
+	 add		%0, %1, r0
+	 addui		%0, r0, %1
+	 sh		0(%0), %1
+	 lh		%0, 0(%1)
+	 sh		%0(r0), %1
+	 lh		%0, %1(r0)
+	 sh		0(%0), %1
+	 lh		%0, 0(%1)"
+	[(set_attr "length"	"4,4,4,4,4,4,4,4,4")]
+)
+
+;; -------------------------------------------------------------------------
+;; Compare instructions
+;; -------------------------------------------------------------------------
+
+(define_constants
+	[(CC_REG 11)]
+)
+
+(define_expand "cbranchsi4"
+	[(set
+		(reg:CC CC_REG)
+		(compare:CC
+			(match_operand:SI 1 "general_operand" "")
+			(match_operand:SI 2 "general_operand" "")
+		)
+	)
+ 	(set
+		(pc)
+		(if_then_else
+			(match_operator:CC 0 "comparison_operator"
+				[(reg:CC CC_REG) (const_int 0)]
+			)
+			(label_ref (match_operand 3 "" ""))
+			(pc)
+		)
+	)]
+	""
+{
+	/* Force the compare operands into registers.	*/
+	if (GET_CODE (operands[1]) != REG)
+		operands[1] = force_reg (SImode, operands[1]);
+	if (GET_CODE (operands[2]) != REG)
+		operands[2] = force_reg (SImode, operands[2]);
+}
+)
+
+(define_insn "*cmpsi"
+	[(set
+		(reg:CC CC_REG)
+		(compare
+			(match_operand:SI 0 "register_operand" "r")
+			(match_operand:SI 1 "register_operand"	"r")
+		)
+	)]
+	""
+	"cmp	%0, %1"
+)
+
+
+;; -------------------------------------------------------------------------
+;; Branch instructions
+;; -------------------------------------------------------------------------
+
+(define_code_iterator cond [ne eq lt ltu gt gtu ge le geu leu])
+
+(define_code_attr CC
+[
+	(ne "ne")	(eq "eq")	(lt "lt")	(ltu "ltu")
+	(gt "gt")	(gtu "gtu")	(ge "ge")	(le "le")
+	(geu "geu")	(leu "leu")
+]
+)
+
+(define_code_attr rCC
+[
+	(ne "eq")	(eq "ne")	(lt "ge")	(ltu "geu")
+	(gt "le")	(gtu "leu")	(ge "lt")	(le "gt")
+	(geu "ltu")	(leu "gtu")
+]
+)
+
+(define_insn "*b<cond:code>"
+	[(set
+		(pc)
+		(if_then_else
+			(cond (reg:CC CC_REG) (const_int 0))
+			(label_ref (match_operand 0 "" ""))
+			(pc)
+		)
+	)]
+	""
+{
+	if (get_attr_length(insn) == 4)
+		return "b<CC>	 %l0";
+	else
+		return "b<rCC>	 .+6\n\tjmpa	 %l0";
+}
+	[(set
+		(attr "length")
+		(if_then_else
+			(lt
+				(abs (minus (pc) (match_dup 0)))
+				(const_int 1022)
+			)
+			(const_int 4)
+			(const_int 4)
+		)
+	)]
+)
+
+;; -------------------------------------------------------------------------
+;; Call and Jump instructions
+;; -------------------------------------------------------------------------
+
+(define_expand "call"
+	[(call
+		(match_operand:QI 0 "memory_operand" "")
+		(match_operand 1 "general_operand" "")
+	)]
+	""
+{
+	gcc_assert (MEM_P (operands[0]));
+}
+)
+
+(define_insn "*call"
+	[(call
+		(mem:QI (match_operand:SI 0 "nonmemory_operand" "i, r"))
+		(match_operand 1 "" "")
+	)]
+	""
+	"@
+	 jsra	%0
+	 jsr	%0"
+	[(set_attr "length"	"4,4")]
+)
+
+(define_expand "call_value"
+	[(set
+		(match_operand 0 "" "")
+		(call
+			(match_operand:QI 1 "memory_operand" "")
+			(match_operand 2 "" "")
+		)
+	)]
+	""
+{
+	gcc_assert (MEM_P (operands[1]));
+}
+)
+
+(define_insn "*call_value"
+	[(set
+		(match_operand 0 "register_operand" "=r")
+		(call
+			(mem:QI (match_operand:SI 1 "immediate_operand" "i"))
+			(match_operand 2 "" "")
+		)
+	)]
+	""
+	"jsra	 %1"
+	[(set_attr "length"	"4")]
+)
+
+(define_insn "*call_value_indirect"
+	[(set
+		(match_operand 0 "register_operand" "=r")
+		(call
+			(mem:QI (match_operand:SI 1 "register_operand" "r"))
+			(match_operand 2 "" "")
+		)
+	)]
+	""
+	"jsr	%1"
+)
 
 (define_insn "indirect_jump"
-	[(set (pc) (match_operand 0 "address_operand" "p"))]
+	[(set
+		(pc) (match_operand:SI 0 "nonimmediate_operand" "r")
+	)]
 	""
-	"GO r20,%a0")
+	"j	0(%0)"
+)
 
-; FIXME: This is just a jump, and should be expanded to one.
-(define_insn "tablejump"
-	[(set (pc) (match_operand:SI 0 "address_operand" "p"))
-	(use (label_ref (match_operand 1 "" "")))]
+(define_insn "jump"
+	[(set
+		(pc) (label_ref (match_operand 0 "" ""))
+	)]
 	""
-	"GO r20,%a0")
+	"j	%l0(r0)"
+	[(set_attr "length"	"4")]
+)
 
-; The only peculiar thing is that the register stack has to be unwound at
-; nonlocal_goto_receiver.	At each function that has a nonlocal label, we
-; save at function entry the location of the "alpha" register stack
-; pointer, rO, in a stack slot known to that function (right below where
-; the frame-pointer would be located).
-; In the nonlocal goto receiver, we unwind the register stack by a series
-; of "pop 0,0" until rO equals the saved value.	(If it goes lower, we
-; should die with a trap.)
-(define_expand "nonlocal_goto_receiver"
-	[(parallel [(unspec_volatile [(const_int 0)] 1)
-			(clobber (scratch:SI))
-			(clobber (reg:SI HIP_rJ_REGNUM))
-			])
-	(set (reg:SI HIP_rJ_REGNUM) (match_dup 0))
-	]
+
+;; -------------------------------------------------------------------------
+;; Prologue & Epilogue
+;; -------------------------------------------------------------------------
+
+(define_expand "prologue"
+	[(clobber (const_int 0))]
 	""
-	"
-{/*
-	operands[0]
-		= hip_get_hard_reg_initial_val (Pmode,
-						HIP_INCOMING_RETURN_ADDRESS_REGNUM);*/
+{
+	hip_expand_prologue();
+	DONE;
+}
+)
 
-	/* Mark this function as containing a landing-pad.	*/
-	/*cfun->machine->has_landing_pad = 1;*/
-}")
-
-; GCC can insist on using saved registers to keep the slot address in
-; "across" the exception, or (perhaps) to use saved registers in the
-; address and re-use them after the register stack unwind, so it's best
-; to form the address ourselves.
-(define_insn "*nonlocal_goto_receiver_expanded"
-	[(unspec_volatile [(const_int 0)] 1)
-	(clobber (match_scratch:SI 0 "=&r"))
-	(clobber (reg:SI HIP_rJ_REGNUM))
-	]
+(define_expand "epilogue"
+	[(return)]
 	""
-{/*
-	rtx temp_reg = operands[0];
-	rtx my_operands[2];
-	HOST_WIDEST_INT offs;
-	const char *my_template
-		= "GETA r20,0f\;PUT rJ,r20\;LDOU r20,%a0\n\
-0:\;GET %1,rO\;CMPU %1,%1,r20\;BNP %1,1f\;POP 0,0\n1:";
+{
+	hip_expand_epilogue();
+	DONE;
+}
+)
 
-	my_operands[1] = temp_reg;*/
-
-	/* If we have a frame-pointer (hence unknown stack-pointer offset),
-		just use the frame-pointer and the known offset.	*/
-	/*if (frame_pointer_needed)
-		{
-		my_operands[0] = GEN_INT (-HIP_fp_rO_OFFSET);
-
-		output_asm_insn ("NEGU %1,0,%0", my_operands);
-		my_operands[0] = gen_rtx_PLUS (Pmode, frame_pointer_rtx, temp_reg);
-		}
-	else
-		{*/
-		/* We know the fp-based offset, so "eliminate" it to be sp-based.	*/
-		/*offs
-	= (hip_initial_elimination_offset (HIP_FRAME_POINTER_REGNUM,
-							HIP_STACK_POINTER_REGNUM)
-		+ HIP_fp_rO_OFFSET);
-
-		if (offs >= 0 && offs <= 255)
-	my_operands[0]
-		= gen_rtx_PLUS (Pmode, stack_pointer_rtx, GEN_INT (offs));
-		else
-	{
-		hip_output_register_setting (asm_out_file, REGNO (temp_reg),
-					offs, 1);
-		my_operands[0] = gen_rtx_PLUS (Pmode, stack_pointer_rtx, temp_reg);
-	}
-		}
-
-	output_asm_insn (my_template, my_operands);
-	return "";*/
-})
-
-(define_insn "*Naddu"
-	[(set (match_operand:SI 0 "register_operand" "=r")
-	(plus:SI (mult:SI (match_operand:SI 1 "register_operand" "r")
-				(match_operand:SI 2 "const_int_operand" "n"))
-			(match_operand:SI 3 "hip_reg_or_8bit_operand" "rI")))]
-	"GET_CODE (operands[2]) == CONST_INT
-	&& (INTVAL (operands[2]) == 2
-			|| INTVAL (operands[2]) == 4
-			|| INTVAL (operands[2]) == 8
-			|| INTVAL (operands[2]) == 16)"
-	"%2addu %0,%1,%3")
-
-(define_insn "*andn"
-	[(set (match_operand:SI 0 "register_operand" "=r")
-	(and:SI
-		(not:SI (match_operand:SI 1 "hip_reg_or_8bit_operand" "rI"))
-		(match_operand:SI 2 "register_operand" "r")))]
-	""
-	"ANDN %0,%2,%1")
-
-(define_insn "*nand"
-	[(set (match_operand:SI 0 "register_operand" "=r")
-	(ior:SI
-		(not:SI (match_operand:SI 1 "register_operand" "%r"))
-		(not:SI (match_operand:SI 2 "hip_reg_or_8bit_operand" "rI"))))]
-	""
-	"NAND %0,%1,%2")
-
-(define_insn "*nor"
-	[(set (match_operand:SI 0 "register_operand" "=r")
-	(and:SI
-		(not:SI (match_operand:SI 1 "register_operand" "%r"))
-		(not:SI (match_operand:SI 2 "hip_reg_or_8bit_operand" "rI"))))]
-	""
-	"NOR %0,%1,%2")
-
-(define_insn "*nxor"
-	[(set (match_operand:SI 0 "register_operand" "=r")
-	(not:SI
-		(xor:SI (match_operand:SI 1 "register_operand" "%r")
-			(match_operand:SI 2 "hip_reg_or_8bit_operand" "rI"))))]
-	""
-	"NXOR %0,%1,%2")
-
-(define_insn "sync_icache"
-	[(unspec_volatile [(match_operand:SI 0 "memory_operand" "m")
-				(match_operand:SI 1 "const_int_operand" "I")] 0)]
-	""
-	"SYNCID %1,%0")
-
-; Local Variables:
-; mode: lisp
-; indent-tabs-mode: t
-; End:
+(define_insn "returner"
+	[(return)]
+	"reload_completed"
+	"j 0(r31)"
+)
