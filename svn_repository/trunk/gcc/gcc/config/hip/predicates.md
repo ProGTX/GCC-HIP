@@ -41,13 +41,9 @@
 }
 )
 
-;; Nonzero if OP can be an immediate or offset operand.
-(define_predicate "hip_offset_operand"
+(define_predicate "hip_reg_or_int"
 	(ior
 		(match_code "reg")
-		(and
-			(match_code "const_int")
-			(match_test "IN_RANGE(INTVAL(op), -32768, 32767)")
-		)
+		(match_code "const_int")
 	)
 )

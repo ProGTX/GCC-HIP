@@ -26,15 +26,6 @@
 # sections.
 
 	.file		"crti.asm"
-
-	.section	".init"
-	.global	_init
-	.type	_init, @function
-	.p2align	1
 _init:
 
-	.section	".fini"
-	.global	_fini
-	.type	_fini,@function
-	.p2align	1
 _fini:

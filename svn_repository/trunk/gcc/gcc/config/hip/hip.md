@@ -25,8 +25,15 @@
 (include "constraints.md")
 (include "predicates.md")
 
-; All instructions are four bytes long.
-(define_attr "length" "" (const_int 4))
+(define_constants
+	[
+		(HIP_ZERO 0)
+		(HIP_CC 23)
+		(HIP_FP 29)
+		(HIP_SP 30)
+		(HIP_RA 31)
+	]
+)
 
 ;; -------------------------------------------------------------------------
 ;; nop instruction
@@ -44,83 +51,33 @@
 
 (define_insn "addsi3"
 	[(set
-		(match_operand:SI 0 "register_operand" "=r, r, r")
+		(match_operand:SI 0 "register_operand" "=r, =r, =r")
 		(plus:SI
-			(match_operand:SI 1 "register_operand"		"r, r, r")
-			(match_operand:SI 2 "hip_offset_operand"	"I, N, r")
+			(match_operand:SI 1 "register_operand"	"r, r, %r")
+			(match_operand:SI 2 "hip_reg_or_int"	"I, N, r")
 		)
 	)]
 	""
 	"@
-	addi	%0, %1, %2
-	subi	%0, %1, -%2
-	add		%0, %1, %2"
+	addui	%0, %1, %2
+	subui	%0, %1, %n2
+	addu	%0, %1, %2"
 )
 
 (define_insn "subsi3"
 	[(set
-		(match_operand:SI 0 "register_operand" "=r, r")
+		(match_operand:SI 0 "register_operand" "=r, =r, =r")
 		(minus:SI
-			(match_operand:SI 1 "register_operand"		"r, r")
-			(match_operand:SI 2 "hip_offset_operand"	"I, r")
+			(match_operand:SI 1 "register_operand"	"r, r, r")
+			(match_operand:SI 2 "hip_reg_or_int"	"I, T, r")
 		)
 	)]
 	""
 	"@
-	subi	%0, %1, %2
-	sub		%0, %1, %2"
+	subui	%0, %1, %2
+	subui	%0, %1, %2
+	subu	%0, %1, %2"
 )
-
-;(define_insn "mulsi3"
-;	[(set
-;		(match_operand:SI 0 "register_operand" "=r")
-;		(mult:SI
-;			(match_operand:SI 1 "register_operand" "0")
-;			(match_operand:SI 2 "register_operand" "r")
-;		)
-;	)]
-;	""
-;	"mul.l	%0, %2")
-
-;(define_insn "divsi3"
-;	[(set
-;		(match_operand:SI 0 "register_operand" "=r")
-;		(div:SI
-;	 	(match_operand:SI 1 "register_operand" "0")
-;	 	(match_operand:SI 2 "register_operand" "r"))
-;	)]
-;	""
-;	"div.l	%0, %2")
-
-;(define_insn "udivsi3"
-;	[(set
-;		(match_operand:SI 0 "register_operand" "=r")
-;		(udiv:SI
-;	 	(match_operand:SI 1 "register_operand" "0")
-;	 	(match_operand:SI 2 "register_operand" "r"))
-;	)]
-;	""
-;	"udiv.l %0, %2")
-
-;(define_insn "modsi3"
-;	[(set
-;		(match_operand:SI 0 "register_operand" "=r")
-;		(mod:SI
-;	 	(match_operand:SI 1 "register_operand" "0")
-;	 	(match_operand:SI 2 "register_operand" "r"))
-;	)]
-;	""
-;	"mod.l	%0, %2")
-
-;(define_insn "umodsi3"
-;	[(set
-;		(match_operand:SI 0 "register_operand" "=r")
-;		(umod:SI
-;	 	(match_operand:SI 1 "register_operand" "0")
-;	 	(match_operand:SI 2 "register_operand" "r"))
-;	)]
-;	""
-;	"umod.l %0, %2")
 
 ;; -------------------------------------------------------------------------
 ;; Unary arithmetic instructions
@@ -132,7 +89,7 @@
 		(neg:SI (match_operand:SI 1 "register_operand" "r"))
 	)]
 	""
-	"sub	%0, r0, %1"
+	"subu	%0, r0, %1"
 )
 
 (define_insn "one_cmplsi2"
@@ -141,7 +98,7 @@
 		(not:SI (match_operand:SI 1 "register_operand" "r"))
 	)]
 	""
-	"not	%0, %1"
+	"not	%0, %1, r0"
 )
 
 ;; -------------------------------------------------------------------------
@@ -152,7 +109,7 @@
 	[(set
 		(match_operand:SI 0 "register_operand" "=r, r")
 		(and:SI
-			(match_operand:SI 1 "register_operand" "r, r")
+			(match_operand:SI 1 "register_operand" "r, %r")
 			(match_operand:SI 2 "register_operand" "I, r")
 		)
 	)]
@@ -194,7 +151,7 @@
 ;; Shifters
 ;; -------------------------------------------------------------------------
 
-(define_insn "lshlsi3"
+(define_insn "ashlsi3"
 	[(set
 		(match_operand:SI 0 "register_operand" "=r, r")
 		(ashift:SI
@@ -244,22 +201,34 @@
 
 ;; Push a register onto the stack
 (define_insn "movsi_push"
-	[(set
-		(mem:SI (pre_dec:SI (reg:SI 1)))
-		(match_operand:SI 0 "register_operand" "r")
-	)]
+	[
+		(set
+			(mem:SI (reg:SI HIP_SP))
+			(match_operand:SI 0 "register_operand" "r")
+		)
+		(post_dec:SI (reg:SI HIP_SP))
+	]
 	""
-	"sw 0(r30), %0"
+{
+	operands[1] = stack_pointer_rtx;
+	return "sw		0(%1), %0";
+}
 )
 
 ;; Pop a register from the stack
 (define_insn "movsi_pop"
-	[(set
-		(match_operand:SI 1 "register_operand" "=r")
-		(mem:SI (post_inc:SI (match_operand:SI 0 "register_operand" "r")))
-	)]
+	[
+		(pre_inc:SI (reg:SI HIP_SP))
+		(set
+			(match_operand:SI 1 "register_operand" "=r")
+			(mem:SI (match_operand:SI 0 "register_operand" "r"))
+		)
+	]
 	""
-	"lw %0, 0(r30)"
+{
+	operands[0] = stack_pointer_rtx;
+	return "lw		%1, 0(%0)";
+}
 )
 
 (define_expand "movsi"
@@ -267,7 +236,7 @@
 		(match_operand:SI 0 "general_operand" "")
 		(match_operand:SI 1 "general_operand" "")
 	)]
-	 ""
+	""
 {
 	/* If this is a store, force the value into a register.	*/
 	if(!(reload_in_progress || reload_completed))
@@ -276,7 +245,7 @@
 		{
 			operands[1] = force_reg(SImode, operands[1]);
 			if(MEM_P(XEXP(operands[0], 0)))
-				operands[0] = gen_rtx_MEM(SImode, force_reg (SImode, XEXP (operands[0], 0)));
+				operands[0] = gen_rtx_MEM(SImode, force_reg(SImode, XEXP (operands[0], 0)));
 		}
 		else if(MEM_P(operands[1]) && MEM_P(XEXP (operands[1], 0)))
 		{
@@ -288,22 +257,21 @@
 
 (define_insn "*movsi"
 	[(set
-		(match_operand:SI 0 "general_operand"				"=r,r, r, W, r, A, r, B, r")
-		(match_operand:SI 1 "hip_general_movsrc_operand"	"O, r, i, r, W, r, A, r, B")
+		(match_operand:SI 0 "general_operand"				"=r, =r, =r, A, =r, B, =r, W, =r")
+		(match_operand:SI 1 "hip_general_movsrc_operand"	" r,  T,  i, r,  A, r,  B, r,  W")
 	)]
 	"	register_operand(operands[0], SImode) ||
 		register_operand(operands[1], SImode)"
 	"@
-	 add		%0, r0, r0
-	 add		%0, r0, %1
-	 addui		%0, r0, %1
-	 swW		%0, %1
-	 lwW		%0, %1
-	 swA		%0(r0), %1
-	 lwA		%0, %1(r0)
-	 swB		%0, %1
-	 lwB		%0, 0(%1)"
-	[(set_attr "length"	"4,4,4,4,4,4,4,4,4")]
+	addu	%0, r0, %1
+	lhi		%0, %1\\n	addui	%0, %0, %1
+	addui	%0, r0, %1
+	sw		%0(r0), %1
+	lw		%0, %1(r0)
+	sw		%0, %1
+	lw		%0, %1
+	sw		%0, %1
+	lw		%0, %1"
 )
 
 (define_expand "movqi"
@@ -321,22 +289,20 @@
 
 (define_insn "*movqi"
 	[(set
-		(match_operand:QI 0 "general_operand"				"=r,r, r, W, r, A, r, B, r")
-		(match_operand:QI 1 "hip_general_movsrc_operand"	"O, r, i, r, W, r, A, r, B")
+		(match_operand:QI 0 "general_operand"				"=r, =r, A, =r, B, =r, W, =r")
+		(match_operand:QI 1 "hip_general_movsrc_operand"	" r,  i, r,  A, r,  B, r,  W")
 	)]
 	"	register_operand(operands[0], QImode) ||
 		register_operand(operands[1], QImode)"
 	"@
-	 add		%0, r0, r0
-	 add		%0, %1, r0
-	 addui		%0, r0, %1
-	 sb		0(%0), %1
-	 lb		%0, 0(%1)
-	 sb		%0(r0), %1
-	 lb		%0, %1(r0)
-	 sb		0(%0), %1
-	 lb		%0, 0(%1)"
-	[(set_attr "length"	"4,4,4,4,4,4,4,4,4")]
+	addu	%0, r0, %1
+	addui	%0, r0, %1
+	sb		%0(r0), %1
+	lb		%0, %1(r0)
+	sb		%0, %1
+	lb		%0, %1
+	sb		%0, %1
+	lb		%0, %1"
 )
 
 (define_expand "movhi"
@@ -347,129 +313,135 @@
 	""
 {
 	/* If this is a store, force the value into a register.	*/
-	if(MEM_P (operands[0]))
+	if(MEM_P(operands[0]))
 		operands[1] = force_reg(HImode, operands[1]);
 }
 )
 
 (define_insn "*movhi"
 	[(set
-		(match_operand:HI 0 "general_operand"				"=r,r, r, W, r, A, r, B, r")
-		(match_operand:HI 1 "hip_general_movsrc_operand"	"O, r, i, r, W, r, A, r, B")
+		(match_operand:HI 0 "general_operand"				"=r, =r, A, =r, B, =r, W, =r")
+		(match_operand:HI 1 "hip_general_movsrc_operand"	" r,  i, r,  A, r,  B, r,  W")
 	)]
 	"	register_operand(operands[0], HImode) ||
 		register_operand(operands[1], HImode)"
 	"@
-	 add		%0, r0, r0
-	 add		%0, %1, r0
-	 addui		%0, r0, %1
-	 sh		0(%0), %1
-	 lh		%0, 0(%1)
-	 sh		%0(r0), %1
-	 lh		%0, %1(r0)
-	 sh		0(%0), %1
-	 lh		%0, 0(%1)"
-	[(set_attr "length"	"4,4,4,4,4,4,4,4,4")]
+	addu	%0, r0, %1
+	addui	%0, r0, %1
+	sh		%0(r0), %1
+	lh		%0, %1(r0)
+	sh		%0, %1
+	lh		%0, %1
+	sh		%0, %1
+	lh		%0, %1"
 )
 
 ;; -------------------------------------------------------------------------
 ;; Compare instructions
 ;; -------------------------------------------------------------------------
 
-(define_constants
-	[(CC_REG 11)]
+(define_code_iterator comp		[lt ltu gt gtu ne eq])
+(define_code_iterator compnot	[ge geu le leu])
+
+(define_code_attr CMP [
+	(lt "lt") (ltu "ltu") (gt "gt") (gtu "gtu") (ne "ne") (eq "eq")
+])
+
+(define_code_attr CMPNOT [
+	(ge "lt") (geu "ltu") (le "gt") (leu "gtu")
+])
+
+(define_code_attr CMPNOTNOT [
+	(ge "ge") (geu "geu") (le "le") (leu "leu")
+])
+
+(define_expand "cstoresi4"
+	[(set
+		(match_operand:SI 0 "register_operand")
+		(match_operator:SI 1 "comparison_operator" [
+			(match_operand:SI 2 "register_operand")
+			(match_operand:SI 3 "hip_reg_or_int")
+		])
+	)]
+	""
 )
 
-(define_expand "cbranchsi4"
+(define_insn "*s<comp:code>"
 	[(set
-		(reg:CC CC_REG)
-		(compare:CC
-			(match_operand:SI 1 "general_operand" "")
-			(match_operand:SI 2 "general_operand" "")
+		(match_operand:SI 0 "register_operand" "=r, =r")
+		(comp:SI
+			(match_operand:SI 1 "register_operand"	"r, r")
+			(match_operand:SI 2 "hip_reg_or_int"	"r, I")
 		)
-	)
- 	(set
-		(pc)
-		(if_then_else
-			(match_operator:CC 0 "comparison_operator"
-				[(reg:CC CC_REG) (const_int 0)]
-			)
-			(label_ref (match_operand 3 "" ""))
-			(pc)
+	)]
+	""
+	"@
+	s<CMP>		%0, %1, %2
+	s<CMP>i	%0, %1, %2"
+)
+
+(define_insn "*s<compnot:code>"
+	[(set
+		(match_operand:SI 0 "register_operand" "=r, =r")
+		(compnot:SI
+			(match_operand:SI 1 "register_operand"	"r, r")
+			(match_operand:SI 2 "hip_reg_or_int"	"r, I")
 		)
 	)]
 	""
 {
-	/* Force the compare operands into registers.	*/
-	if (GET_CODE (operands[1]) != REG)
-		operands[1] = force_reg (SImode, operands[1]);
-	if (GET_CODE (operands[2]) != REG)
-		operands[2] = force_reg (SImode, operands[2]);
+	switch(which_alternative)
+	{
+		case 0:
+			return "s<CMPNOT>		%0, %1, %2\n	xori	%0, %0, 1";
+		case 1:
+			/* TODO: Change constants accordingly? */
+			return "s<CMPNOT>i	%0, %1, %2\n	xori	%0, %0, 1";
+		default:
+			abort();
+	}
 }
 )
-
-(define_insn "*cmpsi"
-	[(set
-		(reg:CC CC_REG)
-		(compare
-			(match_operand:SI 0 "register_operand" "r")
-			(match_operand:SI 1 "register_operand"	"r")
-		)
-	)]
-	""
-	"cmp	%0, %1"
-)
-
 
 ;; -------------------------------------------------------------------------
 ;; Branch instructions
 ;; -------------------------------------------------------------------------
 
-(define_code_iterator cond [ne eq lt ltu gt gtu ge le geu leu])
-
-(define_code_attr CC
-[
-	(ne "ne")	(eq "eq")	(lt "lt")	(ltu "ltu")
-	(gt "gt")	(gtu "gtu")	(ge "ge")	(le "le")
-	(geu "geu")	(leu "leu")
-]
-)
-
-(define_code_attr rCC
-[
-	(ne "eq")	(eq "ne")	(lt "ge")	(ltu "geu")
-	(gt "le")	(gtu "leu")	(ge "lt")	(le "gt")
-	(geu "ltu")	(leu "gtu")
-]
-)
-
-(define_insn "*b<cond:code>"
+(define_expand "cbranchsi4"
 	[(set
 		(pc)
 		(if_then_else
-			(cond (reg:CC CC_REG) (const_int 0))
-			(label_ref (match_operand 0 "" ""))
+			(match_operator 0 "comparison_operator" [
+				(match_operand:SI 1 "register_operand")
+				(match_operand:SI 2 "hip_reg_or_int")
+			])
+			(label_ref (match_operand 3 ""))
 			(pc)
 		)
 	)]
 	""
 {
-	if (get_attr_length(insn) == 4)
-		return "b<CC>	 %l0";
-	else
-		return "b<rCC>	 .+6\n\tjmpa	 %l0";
+	rtx condition_reg = gen_rtx_REG(SImode, HIP_CC);
+	emit_insn(gen_cstoresi4(condition_reg, operands[0], operands[1], operands[2]));
+	emit_jump_insn(gen_condjump(condition_reg, operands[3]));
+	DONE;
 }
+)
+
+(define_insn "condjump"
 	[(set
-		(attr "length")
+		(pc)
 		(if_then_else
-			(lt
-				(abs (minus (pc) (match_dup 0)))
-				(const_int 1022)
+			(ne
+				(match_operand:SI 0 "hip_reg_or_int"	"")
+				(const_int 0)
 			)
-			(const_int 4)
-			(const_int 4)
+			(label_ref (match_operand 1))
+			(pc)
 		)
 	)]
+	""
+	"bne		%0, %l1"
 )
 
 ;; -------------------------------------------------------------------------
@@ -477,65 +449,80 @@
 ;; -------------------------------------------------------------------------
 
 (define_expand "call"
-	[(call
-		(match_operand:QI 0 "memory_operand" "")
-		(match_operand 1 "general_operand" "")
-	)]
+	[
+		(clobber (reg:SI HIP_RA))
+		(call
+			(match_operand:HI 0 "memory_operand" "")
+			(match_operand 1 "general_operand" "")
+		)
+	]
 	""
 {
-	gcc_assert (MEM_P (operands[0]));
+	fprintf(stderr, "call\n");
+	gcc_assert(MEM_P(operands[0]));
 }
 )
 
 (define_insn "*call"
 	[(call
-		(mem:QI (match_operand:SI 0 "nonmemory_operand" "i, r"))
+		(mem:HI
+			(match_operand:SI 0 "nonmemory_operand" "i, r")
+		)
 		(match_operand 1 "" "")
 	)]
 	""
-	"@
-	 jsra	%0
-	 jsr	%0"
-	[(set_attr "length"	"4,4")]
+{
+	operands[1] = gen_rtx_REG(SImode, HIP_RA);
+	switch(which_alternative)
+	{
+		case 0:
+			return "call	%1, %0(r0)";
+		case 1:
+			return "call	%1, 0(%0)";
+		default:
+			break;
+	}
+}
 )
 
 (define_expand "call_value"
-	[(set
-		(match_operand 0 "" "")
-		(call
-			(match_operand:QI 1 "memory_operand" "")
-			(match_operand 2 "" "")
+	[
+		(clobber (reg:SI HIP_RA))
+		(set
+			(match_operand 0 "" "")
+			(call
+				(match_operand:HI 1 "memory_operand" "")
+				(match_operand 2 "" "")
+			)
 		)
-	)]
+	]
 	""
 {
-	gcc_assert (MEM_P (operands[1]));
+	gcc_assert(MEM_P(operands[1]));
 }
 )
 
 (define_insn "*call_value"
 	[(set
-		(match_operand 0 "register_operand" "=r")
+		(match_operand 0 "register_operand" "=r, =r")
 		(call
-			(mem:QI (match_operand:SI 1 "immediate_operand" "i"))
+			(mem:HI (match_operand:SI 1 "general_operand" "i, r"))
 			(match_operand 2 "" "")
 		)
 	)]
 	""
-	"jsra	 %1"
-	[(set_attr "length"	"4")]
-)
-
-(define_insn "*call_value_indirect"
-	[(set
-		(match_operand 0 "register_operand" "=r")
-		(call
-			(mem:QI (match_operand:SI 1 "register_operand" "r"))
-			(match_operand 2 "" "")
-		)
-	)]
-	""
-	"jsr	%1"
+{
+	operands[2] = gen_rtx_REG(SImode, HIP_RA);
+	switch(which_alternative)
+	{
+		case 0:
+			return "call	%2, %1(r0)";
+		case 1:
+			return "call	%2, 0(%1)";
+		default:
+			break;
+	}
+}
 )
 
 (define_insn "indirect_jump"
@@ -543,7 +530,7 @@
 		(pc) (match_operand:SI 0 "nonimmediate_operand" "r")
 	)]
 	""
-	"j	0(%0)"
+	"j		0(%0)"
 )
 
 (define_insn "jump"
@@ -551,8 +538,7 @@
 		(pc) (label_ref (match_operand 0 "" ""))
 	)]
 	""
-	"j	%l0(r0)"
-	[(set_attr "length"	"4")]
+	"j		%l0(r0)"
 )
 
 
@@ -561,7 +547,7 @@
 ;; -------------------------------------------------------------------------
 
 (define_expand "prologue"
-	[(clobber (const_int 0))]
+	[(clobber (const_int HIP_FP))]
 	""
 {
 	hip_expand_prologue();
@@ -581,5 +567,8 @@
 (define_insn "returner"
 	[(return)]
 	"reload_completed"
-	"j 0(r31)"
+{
+	operands[0] = gen_rtx_REG(SImode, HIP_RA);
+	return "j		0(%0)";
+}
 )

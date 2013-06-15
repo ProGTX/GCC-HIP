@@ -8,3 +8,5 @@ The default build installs binaries to /usr/local/gcc-hip-binaries.
 
 To run the compiler, go to /usr/local/gcc-hip-binaries/bin and type:
 ./hip-gcc -S source.c
+
+Windows binaries are provided in gcc-hip-binaries.zip.

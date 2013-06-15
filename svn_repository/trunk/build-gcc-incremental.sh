@@ -3,6 +3,8 @@
 export TARGET=$1
 export PREFIX=/usr/local/gcc-$TARGET-binaries/
 
+mkdir $PREFIX
+
 mkdir ./build-gcc-$TARGET
 cd ./build-gcc-$TARGET
 export PATH=$PATH:$PREFIX/bin

@@ -46,6 +46,7 @@
 #include "tm_p.h"
 #include "langhooks.h"
 #include "df.h"
+#include "string.h"
 
 #define LOSE_AND_RETURN(msgid, x)	\
 if(1)								\
@@ -54,12 +55,97 @@ if(1)								\
 	return;							\
 }
 
-/* Worker function for TARGET_RETURN_IN_MEMORY.  */
+/*
+	TODO: Probably need to break up for large values.
+*/
+void
+hip_asm_output_skip(FILE* stream, int nbytes)
+{
+	char zeros[1024];
+
+	strcpy(zeros, "0");
+
+	int i;
+	for(i = 1; i < nbytes - 1; ++i)
+	{
+		strcat(zeros, ",0");
+	}
+
+	if(nbytes > 1)
+	{
+		strcat(zeros, ",0");
+	}
+
+	fprintf(stream, "\t.byte\t%s\n", zeros);
+}
 
 static bool
+hip_assemble_integer(rtx x, unsigned int size, int aligned_p)
+{
+	char name[6];
+
+	switch(size)
+	{
+		case 1:
+			strcpy(name, "byte");
+			break;
+		case 2:
+			strcpy(name, "word16");
+			break;
+		case 4:
+			strcpy(name, "word");
+			break;
+		case 8:
+			strcpy(name, "word64");
+			break;
+		default:
+			fprintf(stderr, "Size of integer cannot be %u", size);
+			return false;
+	}
+
+	if(aligned_p != 1)
+	{
+		fprintf(stderr, "%s is not aligned, aligned_p: %d", name, aligned_p);
+	}
+
+	fprintf(asm_out_file, "\t.%s\t", name);
+	hip_print_operand(asm_out_file, x, 0);
+	fprintf(asm_out_file, "\n", name);
+
+	return true;
+}
+
+static void
+hip_file_start(void)
+{
+	default_file_start();
+
+	/*
+		Initialize stack and jump to main.
+	*/
+	fprintf(
+		asm_out_file,
+		"	.text\n"
+		"	lhi		r30, 0x4FC\n"
+		"	addui	r30, r30, 0x4FC\n"
+		"	lhi		r26, main\n"
+		"	addui	r26, r26, main\n"
+		"	j		0(r26)\n"
+	);
+
+	/*
+		For some strange reason GCC sometimes prints variables before jumping to the data section.
+		TODO: This is a work-around.
+	*/
+	switch_to_section(data_section);
+}
+
+/* Worker function for TARGET_RETURN_IN_MEMORY.  */
+
+bool
 hip_return_in_memory(const_tree type, const_tree fntype ATTRIBUTE_UNUSED)
 {
-	const HOST_WIDE_INT size = int_size_in_bytes (type);
+	const HOST_WIDE_INT size = int_size_in_bytes(type);
 	return (size == -1 || size > 2 * UNITS_PER_WORD);
 }
 
@@ -72,12 +158,12 @@ hip_return_in_memory(const_tree type, const_tree fntype ATTRIBUTE_UNUSED)
 
 static rtx
 hip_function_value(
-	const_tree valtype,
+	const_tree rettype,
 	const_tree fntype_or_decl ATTRIBUTE_UNUSED,
 	bool outgoing ATTRIBUTE_UNUSED
 )
 {
-	return gen_rtx_REG(TYPE_MODE(valtype), HIP_R0);
+	return gen_rtx_REG(TYPE_MODE(rettype), HIP_RV);
 }
 
 /* Define how to find the value returned by a library function.
@@ -89,7 +175,7 @@ hip_libcall_value(
 	enum machine_mode mode, const_rtx fun ATTRIBUTE_UNUSED
 )
 {
-	return gen_rtx_REG (mode, HIP_R0);
+	return gen_rtx_REG(mode, HIP_RV);
 }
 
 /* Handle TARGET_FUNCTION_VALUE_REGNO_P.
@@ -99,7 +185,7 @@ hip_libcall_value(
 static bool
 hip_function_value_regno_p (const unsigned int regno)
 {
-	return (regno == HIP_R0);
+	return (regno == HIP_RV);
 }
 
 /* Emit an error message when we're in an asm, and a fatal error for
@@ -122,7 +208,7 @@ hip_print_operand_address(FILE *file, rtx x)
 	switch(GET_CODE(x))
 	{
 		case REG:
-			fprintf(file, "(%s)", reg_names[REGNO(x)]);
+			fprintf(file, "0(%s)", reg_names[REGNO(x)]);
 			break;
 
 		case PLUS:
@@ -138,7 +224,7 @@ hip_print_operand_address(FILE *file, rtx x)
 					break;
 				case SYMBOL_REF:
 					output_addr_const(file, XEXP(x, 1));
-					fprintf(file, "(%s)", reg_names[REGNO(XEXP(x, 0))]);
+					fprintf(file, "0(%s)", reg_names[REGNO(XEXP(x, 0))]);
 					break;
 				case CONST:
 					{
@@ -196,13 +282,13 @@ hip_print_operand (FILE *file, rtx x, int code)
 	switch (GET_CODE (operand))
 	{
 		case REG:
-			if(REGNO(operand) > HIP_LAST_GENERAL_REG)
-				internal_error ("internal error: bad register: %d", REGNO(operand));
+			if(REGNO(operand) >= HIP_NUMBER_HARD_REGS)
+				internal_error("internal error: bad register: %d", REGNO(operand));
 			fprintf(file, "%s", reg_names[REGNO(operand)]);
 			return;
 
 		case MEM:
-			output_address (XEXP(operand, 0));
+			output_address(XEXP(operand, 0));
 			return;
 
 		default:
@@ -210,7 +296,7 @@ hip_print_operand (FILE *file, rtx x, int code)
 			do it for us.  */
 			if(CONSTANT_P(operand))
 			{
-				output_addr_const (file, operand);
+				output_addr_const(file, operand);
 				return;
 			}
 			LOSE_AND_RETURN("unexpected operand", x);
@@ -248,6 +334,35 @@ hip_option_override(void)
 {
 	/* Set the per-function-data initializer.  */
 	init_machine_status = hip_init_machine_status;
+}
+
+void
+hip_push_register(int regno)
+{
+	rtx insn;
+
+	insn = emit_insn(
+		gen_movsi_push(
+			gen_rtx_REG(Pmode, regno)
+		)
+	);
+	RTX_FRAME_RELATED_P(insn) = 1;
+
+	insn = emit_insn(gen_subsi3(stack_pointer_rtx, stack_pointer_rtx, GEN_INT(UNITS_PER_WORD)));
+	RTX_FRAME_RELATED_P(insn) = 1;
+}
+
+void
+hip_pop_register(int regno)
+{
+	rtx insn;
+
+	insn = emit_insn(gen_addsi3(stack_pointer_rtx, stack_pointer_rtx, GEN_INT(UNITS_PER_WORD)));
+	RTX_FRAME_RELATED_P(insn) = 1;
+
+	rtx reg = gen_rtx_REG(Pmode, regno);
+	insn = emit_insn(gen_movsi_pop(reg, reg));
+	RTX_FRAME_RELATED_P(insn) = 1;
 }
 
 /* Compute the size of the local area and the size to be adjusted by the
@@ -295,40 +410,22 @@ hip_expand_prologue(void)
 	hip_compute_frame();
 
 	/* Save callee-saved registers.  */
-	for(regno = FIRST_PSEUDO_REGISTER - 1; regno >= 0; --regno)
+	for(regno = HIP_NUMBER_HARD_REGS - 1; regno >= 0; --regno)
 	{
-		if(!fixed_regs[regno] && df_regs_ever_live_p (regno) && !call_used_regs[regno])
+		if(
+			!fixed_regs[regno] &&
+			!call_used_regs[regno] &&
+			df_regs_ever_live_p(regno)
+		)
 		{
-			insn = emit_insn(gen_movsi_push(gen_rtx_REG(Pmode, regno)));
-			RTX_FRAME_RELATED_P(insn) = 1;
+			hip_push_register(regno);
 		}
 	}
 
-	/*insn = emit_move_insn(frame_pointer_rtx, stack_pointer_rtx);
-	RTX_FRAME_RELATED_P(insn) = 1;*/
-
-	if(cfun->machine->size_for_adjusting_sp > 0)
+	if(cfun->machine->callee_saved_reg_size != 0)
 	{
-		int i = cfun->machine->size_for_adjusting_sp;
-		while(i > 255)
-		{
-			insn = emit_insn(
-				gen_subsi3(
-					stack_pointer_rtx, stack_pointer_rtx, GEN_INT(255)
-				)
-			);
-			RTX_FRAME_RELATED_P (insn) = 1;
-			i -= 255;
-		}
-		if(i > 0)
-		{
-			insn = emit_insn(
-				gen_subsi3(
-					stack_pointer_rtx, stack_pointer_rtx, GEN_INT(i)
-				)
-			);
-			RTX_FRAME_RELATED_P(insn) = 1;
-		}
+		insn = emit_move_insn(hard_frame_pointer_rtx, stack_pointer_rtx);
+		RTX_FRAME_RELATED_P(insn) = 1;
 	}
 }
 
@@ -336,38 +433,20 @@ void
 hip_expand_epilogue(void)
 {
 	int regno;
-	rtx reg;
 
 	if(cfun->machine->callee_saved_reg_size != 0)
 	{
-		reg = gen_rtx_REG(Pmode, HIP_R5);
-		if(cfun->machine->callee_saved_reg_size <= 255)
-		{
-			emit_move_insn(reg, hard_frame_pointer_rtx);
-			emit_insn(
-				gen_subsi3(reg, reg, GEN_INT(cfun->machine->callee_saved_reg_size))
-			);
-		}
-		else
-		{
-			emit_move_insn(
-				reg, GEN_INT(-cfun->machine->callee_saved_reg_size)
-			);
-			emit_insn(gen_addsi3(reg, reg, hard_frame_pointer_rtx));
-		}
+		emit_move_insn(stack_pointer_rtx, hard_frame_pointer_rtx);
 
-		/*emit_move_insn(stack_pointer_rtx, frame_pointer_rtx);*/
-
-		for(regno = 0; regno < FIRST_PSEUDO_REGISTER; ++regno)
+		for(regno = 0; regno < HIP_NUMBER_HARD_REGS; ++regno)
 		{
 			if(
-				!fixed_regs[regno]		&&
-				!call_used_regs[regno]	&&
-				df_regs_ever_live_p (regno)
+				!fixed_regs[regno] &&
+				!call_used_regs[regno] &&
+				df_regs_ever_live_p(regno)
 			)
 			{
-				rtx preg = gen_rtx_REG (Pmode, regno);
-				emit_insn(gen_movsi_pop(reg, preg));
+				hip_pop_register(regno);
 			}
 		}
 	}
@@ -414,40 +493,39 @@ hip_setup_incoming_varargs(
 	if(no_rtl)
 		return;
 
+	fprintf(stderr, "TARGET_SETUP_INCOMING_VARARGS\n");
+
 	for(regno = *cum; regno < 8; regno++)
 	{
-		rtx reg = gen_rtx_REG (SImode, regno);
-		rtx slot = gen_rtx_PLUS (Pmode,
-		gen_rtx_REG(SImode, ARG_POINTER_REGNUM),
-		GEN_INT(UNITS_PER_WORD * (3 + (regno-2))));
+		rtx reg = gen_rtx_REG(SImode, regno);
+		rtx slot = gen_rtx_PLUS(
+			Pmode,
+			gen_rtx_REG(SImode, ARG_POINTER_REGNUM),
+			GEN_INT(UNITS_PER_WORD * (3 + (regno-2)))
+		);
 
-		emit_move_insn (gen_rtx_MEM (SImode, slot), reg);
+		emit_move_insn(gen_rtx_MEM(SImode, slot), reg);
 	}
 }
 
 
-/* Return the fixed registers used for condition codes.  */
-
-static bool
-hip_fixed_condition_code_regs(unsigned int *p1, unsigned int *p2)
-{
-	*p1 = CC_REG;
-	*p2 = INVALID_REGNUM;
-	return true;
-}
-
-/* Return the next register to be used to hold a function argument or
-	 NULL_RTX if there's no more space.  */
-
+/*
+	Return the next register to be used to hold a function argument or
+	NULL_RTX if there's no more space.
+*/
 static rtx
-hip_function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode,
+hip_function_arg(CUMULATIVE_ARGS *cum, enum machine_mode mode,
 			const_tree type ATTRIBUTE_UNUSED,
 			bool named ATTRIBUTE_UNUSED)
 {
-	if(*cum < 8)
-		return gen_rtx_REG (mode, *cum);
+	if(*cum <= HIP_P2)
+	{
+		return gen_rtx_REG(mode, *cum);
+	}
 	else
+	{
 		return NULL_RTX;
+	}
 }
 
 #define HIP_FUNCTION_ARG_SIZE(MODE, TYPE)		\
@@ -455,6 +533,12 @@ hip_function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode,
 		? GET_MODE_SIZE(MODE)					\
 		: (unsigned) int_size_in_bytes(TYPE))
 
+/*
+	Updates the summarizer variable pointed to by ca to advance past an
+	argument in the argument list. The values mode, type and named describe that argument.
+	Once this is done, the variable cum is suitable for analyzing the following
+	argument with TARGET_FUNCTION_ARG, etc.
+*/
 static void
 hip_function_arg_advance(
 	CUMULATIVE_ARGS *cum,
@@ -463,9 +547,11 @@ hip_function_arg_advance(
 	bool named ATTRIBUTE_UNUSED
 )
 {
-	*cum = (*cum < HIP_R6
-		? *cum + ((3 + HIP_FUNCTION_ARG_SIZE(mode, type)) / 4)
-		: *cum);
+	*cum = (
+		*cum <= HIP_P2
+			? *cum + ((3 + HIP_FUNCTION_ARG_SIZE(mode, type)) / 4)
+			: *cum
+	);
 }
 
 /* Return non-zero if the function argument described by TYPE is to be
@@ -490,7 +576,7 @@ hip_pass_by_reference(
 	else
 		size = GET_MODE_SIZE (mode);
 
-	return size > 4*6;
+	return size > UNITS_PER_WORD;
 }
 
 /* Some function arguments will only partially fit in the registers
@@ -586,50 +672,53 @@ hip_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
 
 /* Initialize the GCC target structure.  */
 
-#undef  TARGET_PROMOTE_PROTOTYPES
+#undef	TARGET_PROMOTE_PROTOTYPES
 #define TARGET_PROMOTE_PROTOTYPES	hook_bool_const_tree_true
 
-#undef  TARGET_RETURN_IN_MEMORY
+#undef	TARGET_RETURN_IN_MEMORY
 #define TARGET_RETURN_IN_MEMORY		hip_return_in_memory
-#undef  TARGET_MUST_PASS_IN_STACK
+#undef	TARGET_MUST_PASS_IN_STACK
 #define TARGET_MUST_PASS_IN_STACK	must_pass_in_stack_var_size
-#undef  TARGET_PASS_BY_REFERENCE
+#undef	TARGET_PASS_BY_REFERENCE
 #define TARGET_PASS_BY_REFERENCE	hip_pass_by_reference
-#undef  TARGET_ARG_PARTIAL_BYTES
+#undef	TARGET_ARG_PARTIAL_BYTES
 #define TARGET_ARG_PARTIAL_BYTES	hip_arg_partial_bytes
-#undef  TARGET_FUNCTION_ARG
+#undef	TARGET_FUNCTION_ARG
 #define TARGET_FUNCTION_ARG			hip_function_arg
-#undef  TARGET_FUNCTION_ARG_ADVANCE
+#undef	TARGET_FUNCTION_ARG_ADVANCE
 #define TARGET_FUNCTION_ARG_ADVANCE	hip_function_arg_advance
 
-
-#undef  TARGET_SETUP_INCOMING_VARARGS
+#undef	TARGET_SETUP_INCOMING_VARARGS
 #define TARGET_SETUP_INCOMING_VARARGS 	hip_setup_incoming_varargs
 
-#undef	TARGET_FIXED_CONDITION_CODE_REGS
-#define	TARGET_FIXED_CONDITION_CODE_REGS hip_fixed_condition_code_regs
+#undef TARGET_ASM_FILE_START
+#define TARGET_ASM_FILE_START hip_file_start
+
 
 /* Define this to return an RTX representing the place where a
 	 function returns or receives a value of data type RET_TYPE, a tree
 	 node node representing a data type.  */
-#undef TARGET_FUNCTION_VALUE
+#undef	TARGET_FUNCTION_VALUE
 #define TARGET_FUNCTION_VALUE hip_function_value
-#undef TARGET_LIBCALL_VALUE
+#undef	TARGET_LIBCALL_VALUE
 #define TARGET_LIBCALL_VALUE hip_libcall_value
-#undef TARGET_FUNCTION_VALUE_REGNO_P
+#undef	TARGET_FUNCTION_VALUE_REGNO_P
 #define TARGET_FUNCTION_VALUE_REGNO_P hip_function_value_regno_p
 
-#undef TARGET_FRAME_POINTER_REQUIRED
+#undef	TARGET_FRAME_POINTER_REQUIRED
 #define TARGET_FRAME_POINTER_REQUIRED hook_bool_void_true
 
-#undef TARGET_STATIC_CHAIN
+#undef TARGET_ASM_INTEGER
+#define TARGET_ASM_INTEGER hip_assemble_integer
+
+#undef	TARGET_STATIC_CHAIN
 #define TARGET_STATIC_CHAIN hip_static_chain
-#undef TARGET_ASM_TRAMPOLINE_TEMPLATE
+#undef	TARGET_ASM_TRAMPOLINE_TEMPLATE
 #define TARGET_ASM_TRAMPOLINE_TEMPLATE hip_asm_trampoline_template
-#undef TARGET_TRAMPOLINE_INIT
+#undef	TARGET_TRAMPOLINE_INIT
 #define TARGET_TRAMPOLINE_INIT hip_trampoline_init
 
-#undef TARGET_OPTION_OVERRIDE
+#undef	TARGET_OPTION_OVERRIDE
 #define TARGET_OPTION_OVERRIDE hip_option_override
 
 struct gcc_target targetm = TARGET_INITIALIZER;

@@ -96,56 +96,44 @@
 	"r8",	"r9",	"r10",	"r11",	"r12",	"r13",	"r14",	"r15",	\
 	"r16",	"r17",	"r18",	"r19",	"r20",	"r21",	"r22",	"r23",	\
 	"r24",	"r25",	"r26",	"r27",	"r28",	"r29",	"r30",	"r31",	\
-	"?fp",	"?ap",	"pc",	"epc",	"i",	"?cc" }
+	"?fp",	"?ap",	"pc",	"epc",	"i" }
 
-#define HIP_R0	 0	/* Constant zero */
-#define HIP_R1	 1
-#define HIP_R2	 2
-#define HIP_R3	 3
-#define HIP_R4	 4
-#define HIP_R5	 5
-#define HIP_R6	 6
-#define HIP_R7	 7
-#define HIP_R8	 8
-#define HIP_R9	 9
-#define HIP_R10	10
-#define HIP_R11	11
-#define HIP_R12	12
-#define HIP_R13	13
-#define HIP_R14	14
-#define HIP_R15	15
-#define HIP_R16	16
-#define HIP_R17	17
-#define HIP_R18	18
-#define HIP_R19	19
-#define HIP_R20	20
-#define HIP_R21	21
-#define HIP_R22	22
-#define HIP_EXT	23	/* Special extra */
-#define HIP_P1	24	/* First parameter */
-#define HIP_P2	25	/* Second parameter */
-#define HIP_BLJ	26	/* Base long jump */
-#define HIP_BLC	27	/* Base long call */
-#define HIP_RV	28	/* Return value */
-#define HIP_FP	29	/* Frame pointer */
-#define HIP_SP	30	/* Stack pointer */
-#define HIP_RA	31	/* Return address */
-#define HIP_QFP	32
-#define HIP_QAP	33
-#define HIP_PC	34
-#define HIP_EPC	35
-#define HIP_I	36
-#define HIP_CC	37
+enum HIP_REGNUMS
+{
+	HIP_R0,		HIP_R1,		HIP_R2,		HIP_R3,
+	HIP_R4,		HIP_R5,		HIP_R6,		HIP_R7,
+	HIP_R8,		HIP_R9,		HIP_R10,	HIP_R11,
+	HIP_R12,	HIP_R13,	HIP_R14,	HIP_R15,
+	HIP_R16,	HIP_R17,	HIP_R18,	HIP_R19,
+	HIP_R20,	HIP_R21,	HIP_R22,	HIP_R23,
+	HIP_R24,	HIP_R25,	HIP_R26,	HIP_R27,
+	HIP_R28,	HIP_R29,	HIP_R30,	HIP_R31,
+	HIP_NUMBER_HARD_REGS
+};
 
-#define HIP_LAST_GENERAL_REG HIP_RA
-#define FIRST_PSEUDO_REGISTER 38
+#define HIP_ZERO	0	/* Constant zero register */
+#define HIP_CC		23	/* Special extra */
+#define HIP_P1		24	/* First parameter */
+#define HIP_P2		25	/* Second parameter */
+#define HIP_BLJ		26	/* Base long jump */
+#define HIP_BLC		27	/* Base long call */
+#define HIP_RV		28	/* Return value */
+#define HIP_FP		29	/* Frame pointer */
+#define HIP_SP		30	/* Stack pointer */
+#define HIP_RA		31	/* Return address */
+#define HIP_QFP		32
+#define HIP_QAP		33
+#define HIP_PC		34
+#define HIP_EPC		35
+#define HIP_I		36
+
+#define FIRST_PSEUDO_REGISTER 37
 
 enum reg_class
 {
 	NO_REGS,
 	GENERAL_REGS,
 	SPECIAL_REGS,
-	CC_REGS,
 	ALL_REGS,
 	LIM_REG_CLASSES
 };
@@ -162,10 +150,9 @@ enum reg_class
 
 #define REG_CLASS_CONTENTS											\
 {	{ 0x00000000, 0x00000000 },	/* Empty */							\
-	{ 0x00000003, 0xFFFFFFFF }, /* r0 to r31, ?fp, ?ap */			\
-	{ 0x0000001C, 0x00000000 },	/* pc, epc, i */					\
-	{ 0x00000020, 0x00000000 },	/* ?cc */							\
-	{ 0x0000003F, 0xFFFFFFFF }	/* All registers */					\
+	{ 0xFFFFFFFF, 0x00000003 }, /* r0 to r31, ?fp, ?ap */			\
+	{ 0x00000000, 0x0000001C },	/* pc, epc, i */					\
+	{ 0xFFFFFFFF, 0x0000001F }	/* All registers */					\
 }
 
 #define N_REG_CLASSES LIM_REG_CLASSES
@@ -174,19 +161,18 @@ enum reg_class
 	"NO_REGS",				\
 	"GENERAL_REGS",			\
 	"SPECIAL_REGS",			\
-	"CC_REGS",				\
 	"ALL_REGS" }
 
 /*
 	Initializer that says which registers are used for fixed purposes all throughout the
 	compiled code and are therefore not available for general allocation.
 */
-#define FIXED_REGISTERS	{	\
-	1, 0, 0, 0, 0, 0, 0, 0,	\
-	0, 0, 0, 0, 0, 0, 0, 0,	\
-	0, 0, 0, 0, 0, 0, 0, 0,	\
-	1, 1, 1, 1, 1, 1, 1, 1,	\
-	1, 1, 1, 1, 1, 1	}
+#define FIXED_REGISTERS	{				\
+	1, 0, 0, 0, 0, 0, 0, 0,	/* r0-r7*/	\
+	0, 0, 0, 0, 0, 0, 0, 0,	/* r8-r15*/	\
+	0, 0, 0, 0, 0, 0, 0, 0,	/* r16-23*/	\
+	0, 0, 0, 0, 0, 0, 1, 0,	/* r24-31*/	\
+	1, 1, 1, 1, 1		}
 
 /*
 	1 indicates a register that is clobbered (in general) by function calls or is a fixed register.
@@ -195,16 +181,13 @@ enum reg_class
 	If a register has 0 in CALL_USED_REGISTERS, the compiler automatically saves it on
 	function entry and restores it on function exit, if the register is used within the function.
 */
-#define CALL_USED_REGISTERS {	\
-	1, 1, 1, 1, 1, 1, 1, 1,	\
-	1, 1, 1, 1, 1, 1, 1, 1,	\
-	1, 1, 1, 1, 1, 1, 1, 1,	\
-	1, 1, 1, 1, 1, 1, 1, 1,	\
-	1, 1, 1, 1, 1, 1	}
+#define CALL_USED_REGISTERS {			\
+	1, 0, 0, 0, 0, 0, 0, 0,	/* r0-r7*/	\
+	0, 0, 0, 0, 0, 0, 0, 0,	/* r8-r15*/	\
+	0, 0, 0, 0, 0, 0, 0, 0,	/* r16-23*/	\
+	0, 0, 0, 0, 1, 0, 1, 0,	/* r24-31*/	\
+	1, 1, 1, 1, 1			}
 
-
-/* We can't copy to or from our CC register. */
-#define AVOID_CCMODE_COPIES 1
 
 /* A C expression that is nonzero if it is permissible to store a
    value of mode MODE in hard register number REGNO (or in several
@@ -215,7 +198,7 @@ enum reg_class
 /* A C expression whose value is a register class containing hard
    register REGNO.  */
 #define REGNO_REG_CLASS(R) \
-	( (R < HIP_PC) ? GENERAL_REGS : (R == HIP_CC ? CC_REGS : SPECIAL_REGS) )
+	( (R < HIP_PC) ? GENERAL_REGS : SPECIAL_REGS )
 
 /* A C expression for the number of consecutive hard registers,
    starting at register number REGNO, required to hold a value of mode
@@ -236,30 +219,65 @@ enum reg_class
 /* The Overall Framework of an Assembler File */
 
 #undef  ASM_SPEC
-#define ASM_COMMENT_START "."
+#define ASM_COMMENT_START ";"
 #define ASM_APP_ON ""
 #define ASM_APP_OFF ""
 
-#define FILE_ASM_OP	 "\t.file\n"
-
 /* Switch to the text or data segment.  */
-#define TEXT_SECTION_ASM_OP  "\t.text"
-#define DATA_SECTION_ASM_OP  "\t.data"
+
+/*
+	If this isn't defined, main function will generate a call to itself.
+	But this macro doesn't seem to be used in the assembled file,
+	so it's OK to just return an empty string.
+	Initialization is handled by hip_file_start()
+*/
+#define INIT_SECTION_ASM_OP	""
+
+#define TEXT_SECTION_ASM_OP  "\n\t.text\n"
+#define DATA_SECTION_ASM_OP  "\n\t.data\n"
+
+/* Assembler commands */
+
+#define	ASM_OUTPUT_SKIP(stream, nbytes)	\
+	hip_asm_output_skip(stream, nbytes)
+
+#define ASM_OUTPUT_LOCAL(stream, name, size, rounded)	\
+	fprintf(stream, "\t.local %s, %d, %d\n", name, size, rounded)
+
+#define ASM_OUTPUT_COMMON(stream, name, size, rounded)	\
+	fprintf(stream, "%s:\t.space %d\n", name, size)
+
+#define ASM_OUTPUT_LABEL(stream, name)	\
+	fprintf(stream, "%s:", name)
+
+#define ASM_OUTPUT_FUNCTION_LABEL(stream, name, decl)	\
+	fprintf(stream, "%s:\n", name)
+
+#define ASM_GENERATE_INTERNAL_LABEL(LABEL, PREFIX, NUM)	\
+	sprintf(LABEL, "%s%u", PREFIX, (unsigned) (NUM))
 
 /* Assembler Commands for Alignment */
 
+/*
+	TODO: Why doesn't WinHIP support the align pseudo-instruction?
+*/
 #define ASM_OUTPUT_ALIGN(STREAM, POWER) \
-	fprintf (STREAM, "\t.p2align\t%d\n", POWER);
+	fprintf(STREAM, "");
+/*	fprintf(STREAM, "\t.align\t%d\n", 1 << POWER);*/
 
 /* A C compound statement to output to stdio stream STREAM the
    assembler syntax for an instruction operand X.  */
 #define PRINT_OPERAND(STREAM, X, CODE) hip_print_operand (STREAM, X, CODE)
 
-#define PRINT_OPERAND_ADDRESS(STREAM ,X) hip_print_operand_address (STREAM, X)
+#define PRINT_OPERAND_ADDRESS(STREAM, X) hip_print_operand_address (STREAM, X)
 
 /* Output and Generation of Labels */
 
-#define GLOBAL_ASM_OP "\t.global\t"
+/*
+	TODO: Labels seem to be repeating, don't know the reason.
+	Putting a comment here is a functional work-around
+*/
+#define GLOBAL_ASM_OP "; "
 
 /* Passing Arguments in Registers */
 
@@ -288,6 +306,8 @@ enum reg_class
    pointer to a smaller address.  */
 #define STACK_GROWS_DOWNWARD
 
+#define STACK_PUSH_CODE POST_DEC
+
 #define INITIAL_FRAME_POINTER_OFFSET(DEPTH) (DEPTH) = 0
 
 /* Offset from the frame pointer to the first local variable slot to
@@ -301,7 +321,7 @@ enum reg_class
 
 /* Define this if it is the responsibility of the caller to allocate
    the area reserved for arguments passed in registers.  */
-#define REG_PARM_STACK_SPACE(FNDECL) (6 * UNITS_PER_WORD)
+#define REG_PARM_STACK_SPACE(FNDECL) (4 * UNITS_PER_WORD)
 
 /* Offset from the argument pointer register to the first argument's
    address.  On some machines it may depend on the data type of the
@@ -315,7 +335,7 @@ enum reg_class
 /* Define this macro as a C expression that is nonzero for registers that are
    used by the epilogue or the return pattern.  The stack and frame
    pointer registers are already assumed to be used as needed.  */
-#define EPILOGUE_USES(R) (R == HIP_R5)
+#define EPILOGUE_USES(R) (R == HIP_RA)
 
 /* A C expression whose value is RTL representing the location of the
    incoming return address at the beginning of any function, before
@@ -359,7 +379,7 @@ enum reg_class
 #define PARM_BOUNDARY 32
 
 /* Alignment of field after `int : 0' in a structure.  */
-#define EMPTY_FIELD_BOUNDARY  32
+#define EMPTY_FIELD_BOUNDARY 32
 
 /* No data type wants to be aligned rounder than this.  */
 #define BIGGEST_ALIGNMENT 32
@@ -404,11 +424,11 @@ enum reg_class
 #define TRAMPOLINE_ALIGNMENT 32
 
 /* An alias for the machine mode for pointers.  */
-#define Pmode		 SImode
+#define Pmode SImode
 
 /* An alias for the machine mode used for memory references to
    functions being called, in `call' RTL expressions.  */
-#define FUNCTION_MODE QImode
+#define FUNCTION_MODE HImode
 
 /* The register number of the stack pointer register, which must also
    be a fixed register according to `FIXED_REGISTERS'.  */
@@ -448,20 +468,23 @@ enum reg_class
 
 #define INDEX_REG_CLASS NO_REGS
 
-#define HARD_REGNO_OK_FOR_BASE_P(NUM)				\
-(	(unsigned) (NUM) < FIRST_PSEUDO_REGISTER &&		\
-	(REGNO_REG_CLASS(NUM) == GENERAL_REGS	 ||		\
-	(NUM) == HARD_FRAME_POINTER_REGNUM)	)
+#define HARD_REGNO_OK_FOR_BASE_P(NUM)			\
+(	(unsigned) (NUM) < FIRST_PSEUDO_REGISTER &&	\
+	(	REGNO_REG_CLASS(NUM) == GENERAL_REGS ||	\
+		(NUM) == HARD_FRAME_POINTER_REGNUM		\
+	)											\
+)
 
 /* A C expression which is nonzero if register number NUM is suitable
    for use as a base register in operand addresses.  */
 #ifdef REG_OK_STRICT
-#define REGNO_OK_FOR_BASE_P(NUM)		 \
-  (HARD_REGNO_OK_FOR_BASE_P(NUM) 		 \
-   || HARD_REGNO_OK_FOR_BASE_P(reg_renumber[(NUM)]))
+#define REGNO_OK_FOR_BASE_P(NUM)		\
+(	HARD_REGNO_OK_FOR_BASE_P(NUM) ||	\
+	HARD_REGNO_OK_FOR_BASE_P(reg_renumber[(NUM)])	)
 #else
-#define REGNO_OK_FOR_BASE_P(NUM)		 \
-  ((NUM) >= FIRST_PSEUDO_REGISTER || HARD_REGNO_OK_FOR_BASE_P(NUM))
+#define REGNO_OK_FOR_BASE_P(NUM)		\
+(	(NUM) >= FIRST_PSEUDO_REGISTER ||	\
+	HARD_REGNO_OK_FOR_BASE_P(NUM)	)
 #endif
 
 /* A C expression which is nonzero if register number NUM is suitable
@@ -484,8 +507,6 @@ enum reg_class
 /* A number, the maximum number of registers that can appear in a
    valid memory address.  */
 #define MAX_REGS_PER_ADDRESS 1
-
-#define TRULY_NOOP_TRUNCATION(op,ip) 1
 
 /* An alias for a machine mode name.  This is the machine mode that
    elements of a jump-table should have.  */

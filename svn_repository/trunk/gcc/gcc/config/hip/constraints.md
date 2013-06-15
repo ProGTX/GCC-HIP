@@ -35,6 +35,14 @@
 )
 
 (define_constraint "B"
+	"A register indirect memory operand - base address."
+	(and
+		(match_code "mem")
+		(match_test "REG_P(XEXP(op, 0)) && REGNO_OK_FOR_BASE_P(REGNO(XEXP(op, 0)))")
+	)
+)
+
+(define_constraint "W"
 	"An offset address."
 	(and
 		(match_code "mem")
@@ -42,34 +50,26 @@
 	)
 )
 
-(define_constraint "W"
-	"A register indirect memory operand."
-	(and
-		(match_code "mem")
-		(match_test "REG_P(XEXP(op, 0)) && REGNO_OK_FOR_BASE_P(REGNO(XEXP(op, 0)))")
-	)
-)
-
-(define_constraint "O"
-	"The constant zero"
-	(and
-		(match_code "const_int")
-		(match_test "ival == 0")
-	)
-)
-
 (define_constraint "I"
-	"A 16-bit constant (0..32767)"
+	"A 16-bit constant (0..65535)"
 	(and
 		(match_code "const_int")
-		(match_test "ival >= 0 && ival <= 32767")
+		(match_test "ival >= 0 && ival <= 65535")
 	)
 )
 
 (define_constraint "N"
-	"A 16-bit constant -(0..32768)"
+	"A 16-bit constant -(0..65535)"
 	(and
 		(match_code "const_int")
-		(match_test "ival >= -32768 && ival <= 0")
+		(match_test "ival >= -65535 && ival <= 0")
+	)
+)
+
+(define_constraint "T"
+	"Integer constant that is too big to fit into offset"
+	(and
+		(match_code "const_int")
+		(match_test "ival < -65535 || ival > 65535")
 	)
 )
