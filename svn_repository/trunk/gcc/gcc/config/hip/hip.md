@@ -28,7 +28,7 @@
 (define_constants
 	[
 		(HIP_ZERO 0)
-		(HIP_CC 23)
+		(HIP_CC 1)
 		(HIP_FP 29)
 		(HIP_SP 30)
 		(HIP_RA 31)
@@ -197,7 +197,18 @@
 ;; Move instructions
 ;; -------------------------------------------------------------------------
 
-;; SImode
+(define_insn "push_parameter"
+	[(set
+		(mem:SI
+			(post_dec:SI
+				(match_operand:SI 0 "register_operand" "r")
+			)
+		)
+		(match_operand:SI 1 "register_operand" "r")
+	)]
+	""
+	"sw		0(%0), %1\\n	subui	%0, %0, 4"
+)
 
 ;; Push a register onto the stack
 (define_insn "movsi_push"
@@ -351,10 +362,6 @@
 	(ge "lt") (geu "ltu") (le "gt") (leu "gtu")
 ])
 
-(define_code_attr CMPNOTNOT [
-	(ge "ge") (geu "geu") (le "le") (leu "leu")
-])
-
 (define_expand "cstoresi4"
 	[(set
 		(match_operand:SI 0 "register_operand")
@@ -458,7 +465,6 @@
 	]
 	""
 {
-	fprintf(stderr, "call\n");
 	gcc_assert(MEM_P(operands[0]));
 }
 )

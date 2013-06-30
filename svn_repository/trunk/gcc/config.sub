@@ -280,6 +280,7 @@ case $basic_machine in
 	| mipsisa64sr71k | mipsisa64sr71kel \
 	| mipstx39 | mipstx39el \
 	| mn10200 | mn10300 \
+	| hip \
 	| moxie \
 	| mt \
 	| msp430 \
@@ -375,7 +376,6 @@ case $basic_machine in
 	| mipsisa64sb1-* | mipsisa64sb1el-* \
 	| mipsisa64sr71k-* | mipsisa64sr71kel-* \
 	| mipstx39-* | mipstx39el-* \
-	| hip-* \
 	| mmix-* \
 	| mt-* \
 	| msp430-* \
@@ -1201,9 +1201,6 @@ case $basic_machine in
 		;;
 	romp)
 		basic_machine=romp-ibm
-		;;
-	hip)
-		basic_machine=hip-kodek
 		;;
 	mmix)
 		basic_machine=mmix-knuth

@@ -70,6 +70,6 @@
 	"Integer constant that is too big to fit into offset"
 	(and
 		(match_code "const_int")
-		(match_test "ival < -65535 || ival > 65535")
+		(match_test "ival < -32768 || ival > 32767")
 	)
 )

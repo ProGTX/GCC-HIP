@@ -1,22 +1,22 @@
 /* Target Code for hip
-	 Copyright (C) 2008, 2009, 2010  Free Software Foundation
-	 Contributed by Anthony Green.
+	Copyright (C) 2008, 2009, 2010  Free Software Foundation
+	Contributed by Anthony Green.
 
-	 This file is part of GCC.
+	This file is part of GCC.
 
-	 GCC is free software; you can redistribute it and/or modify it
-	 under the terms of the GNU General Public License as published
-	 by the Free Software Foundation; either version 3, or (at your
-	 option) any later version.
+	GCC is free software; you can redistribute it and/or modify it
+	under the terms of the GNU General Public License as published
+	by the Free Software Foundation; either version 3, or (at your
+	option) any later version.
 
-	 GCC is distributed in the hope that it will be useful, but WITHOUT
-	 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-	 or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-	 License for more details.
+	GCC is distributed in the hope that it will be useful, but WITHOUT
+	ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+	or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
+	License for more details.
 
-	 You should have received a copy of the GNU General Public License
-	 along with GCC; see the file COPYING3.  If not see
-	 <http://www.gnu.org/licenses/>.  */
+	You should have received a copy of the GNU General Public License
+	along with GCC; see the file COPYING3.  If not see
+	<http://www.gnu.org/licenses/>.  */
 
 #include "config.h"
 #include "system.h"
@@ -150,11 +150,11 @@ hip_return_in_memory(const_tree type, const_tree fntype ATTRIBUTE_UNUSED)
 }
 
 /* Define how to find the value returned by a function.
-	 VALTYPE is the data type of the value (as a tree).
-	 If the precise function being called is known, FUNC is its
-	 FUNCTION_DECL; otherwise, FUNC is 0.
+	VALTYPE is the data type of the value (as a tree).
+	If the precise function being called is known, FUNC is its
+	FUNCTION_DECL; otherwise, FUNC is 0.
 
-	 We always return values in register r28 for hip.  */
+	We always return values in register r28 for hip.  */
 
 static rtx
 hip_function_value(
@@ -168,7 +168,7 @@ hip_function_value(
 
 /* Define how to find the value returned by a library function.
 
-	 We always return values in register r28 for hip.  */
+	We always return values in register r28 for hip.  */
 
 static rtx
 hip_libcall_value(
@@ -180,21 +180,21 @@ hip_libcall_value(
 
 /* Handle TARGET_FUNCTION_VALUE_REGNO_P.
 
-	 We always return values in register r28 for hip.  */
+	We always return values in register r28 for hip.  */
 
 static bool
-hip_function_value_regno_p (const unsigned int regno)
+hip_function_value_regno_p(const unsigned int regno)
 {
 	return (regno == HIP_RV);
 }
 
 /* Emit an error message when we're in an asm, and a fatal error for
-	 "normal" insns.  Formatted output isn't easily implemented, since we
-	 use output_operand_lossage to output the actual message and handle the
-	 categorization of the error.  */
+	"normal" insns.  Formatted output isn't easily implemented, since we
+	use output_operand_lossage to output the actual message and handle the
+	categorization of the error.  */
 
 static void
-hip_operand_lossage (const char *msgid, rtx op)
+hip_operand_lossage(const char *msgid, rtx op)
 {
 	debug_rtx(op);
 	output_operand_lossage("%s", msgid);
@@ -250,7 +250,7 @@ hip_print_operand_address(FILE *file, rtx x)
 			break;
 
 		default:
-			output_addr_const (file, x);
+			output_addr_const(file, x);
 			break;
 	}
 }
@@ -258,28 +258,28 @@ hip_print_operand_address(FILE *file, rtx x)
 /* The PRINT_OPERAND worker.  */
 
 void
-hip_print_operand (FILE *file, rtx x, int code)
+hip_print_operand(FILE *file, rtx x, int code)
 {
 	rtx operand = x;
 
 	/* New code entries should just be added to the switch below.  If
-	 handling is finished, just return.  If handling was just a
-	 modification of the operand, the modified operand should be put in
-	 "operand", and then do a break to let default handling
-	 (zero-modifier) output the operand.  */
+	handling is finished, just return.  If handling was just a
+	modification of the operand, the modified operand should be put in
+	"operand", and then do a break to let default handling
+	(zero-modifier) output the operand.  */
 
 	switch(code)
 	{
 		case 0:
-		  /* No code, print as usual.  */
-		  break;
+		 /* No code, print as usual.  */
+		 break;
 
 		default:
 			LOSE_AND_RETURN("invalid operand modifier letter", x);
 	}
 
 	/* Print an operand as without a modifier letter.  */
-	switch (GET_CODE (operand))
+	switch(GET_CODE(operand))
 	{
 		case REG:
 			if(REGNO(operand) >= HIP_NUMBER_HARD_REGS)
@@ -306,34 +306,39 @@ hip_print_operand (FILE *file, rtx x, int code)
 
 /* Per-function machine data.  */
 struct GTY(()) machine_function
- {
-	 /* Number of bytes saved on the stack for callee saved registers.  */
-	 int callee_saved_reg_size;
+{
+	/* Number of bytes saved on the stack for callee saved registers.  */
+	unsigned int callee_saved_reg_size;
 
-	 /* Number of bytes saved on the stack for local variables.  */
-	 int local_vars_size;
-
-	 /* The sum of 2 sizes: locals vars and padding byte for saving the
-	* registers.  Used in expand_prologue () and expand_epilogue().  */
-	 int size_for_adjusting_sp;
- };
+	/* Number of bytes saved on the stack for local variables.  */
+	unsigned int local_vars_size;
+};
 
 /* Zero initialization is OK for all current fields.  */
 
 static struct machine_function *
 hip_init_machine_status(void)
 {
-	return ggc_alloc_cleared_machine_function ();
+	return ggc_alloc_cleared_machine_function();
 }
 
 
 /* The TARGET_OPTION_OVERRIDE worker.
-	 All this curently does is set init_machine_status.  */
+	All this curently does is set init_machine_status.  */
 static void
 hip_option_override(void)
 {
 	/* Set the per-function-data initializer.  */
 	init_machine_status = hip_init_machine_status;
+}
+
+static bool
+hip_used_register(int regno)
+{
+	return
+		!fixed_regs[regno] &&
+		!call_used_regs[regno] &&
+		df_regs_ever_live_p(regno);
 }
 
 void
@@ -372,84 +377,85 @@ static void
 hip_compute_frame(void)
 {
 	/* For aligning the local variables.  */
-	int stack_alignment = STACK_BOUNDARY / BITS_PER_UNIT;
+	const int stack_alignment = STACK_BOUNDARY / BITS_PER_UNIT;
 	int padding_locals;
 	int regno;
 
-	/* Padding needed for each element of the frame.  */
-	cfun->machine->local_vars_size = get_frame_size ();
-
-	/* Align to the stack alignment.  */
-	padding_locals = cfun->machine->local_vars_size % stack_alignment;
-	if(padding_locals)
-		padding_locals = stack_alignment - padding_locals;
-
-	cfun->machine->local_vars_size += padding_locals;
-
-	cfun->machine->callee_saved_reg_size = 0;
-
-	/* Save callee-saved registers.  */
-	for(regno = 0; regno < FIRST_PSEUDO_REGISTER; regno++)
+	/* local_vars_size */
 	{
-		if(df_regs_ever_live_p(regno) && (! call_used_regs[regno]))
-			cfun->machine->callee_saved_reg_size += 4;
+		cfun->machine->local_vars_size = get_frame_size();
+
+		/* Align to the stack alignment.  */
+		padding_locals = cfun->machine->local_vars_size % stack_alignment;
+		if(padding_locals)
+			padding_locals = stack_alignment - padding_locals;
+
+		cfun->machine->local_vars_size += padding_locals;
 	}
 
-	cfun->machine->size_for_adjusting_sp =
-		crtl->args.pretend_args_size	+
-		cfun->machine->local_vars_size	+
-		(ACCUMULATE_OUTGOING_ARGS ? crtl->outgoing_args_size : 0);
+	/* callee_saved_reg_size */
+	{
+		cfun->machine->callee_saved_reg_size = 0;
+
+		/* Save callee-saved registers.  */
+		for(regno = 0; regno < HIP_LAST_SAVED_REGISTER; ++regno)
+		{
+			if(hip_used_register(regno))
+				cfun->machine->callee_saved_reg_size += 4;
+		}
+	}
 }
 
 void
 hip_expand_prologue(void)
 {
-	int regno;
-	rtx insn;
-
 	hip_compute_frame();
 
-	/* Save callee-saved registers.  */
-	for(regno = HIP_NUMBER_HARD_REGS - 1; regno >= 0; --regno)
+	hip_push_register(HIP_RA);
+	hip_push_register(HIP_FP);
+	emit_move_insn(hard_frame_pointer_rtx, stack_pointer_rtx);
+
+	/* Reserve stack space for local variables. */
+	if(cfun->machine->local_vars_size != 0)
 	{
-		if(
-			!fixed_regs[regno] &&
-			!call_used_regs[regno] &&
-			df_regs_ever_live_p(regno)
-		)
-		{
-			hip_push_register(regno);
-		}
+		emit_insn(
+			gen_subsi3(
+				stack_pointer_rtx, stack_pointer_rtx, GEN_INT(cfun->machine->local_vars_size)
+			)
+		);
 	}
 
 	if(cfun->machine->callee_saved_reg_size != 0)
 	{
-		insn = emit_move_insn(hard_frame_pointer_rtx, stack_pointer_rtx);
-		RTX_FRAME_RELATED_P(insn) = 1;
+		int regno;
+		for(regno = 0; regno <= HIP_LAST_SAVED_REGISTER; ++regno)
+		{
+			if(hip_used_register(regno))
+			{
+				hip_push_register(regno);
+			}
+		}
 	}
 }
 
 void
 hip_expand_epilogue(void)
 {
-	int regno;
-
 	if(cfun->machine->callee_saved_reg_size != 0)
 	{
-		emit_move_insn(stack_pointer_rtx, hard_frame_pointer_rtx);
-
-		for(regno = 0; regno < HIP_NUMBER_HARD_REGS; ++regno)
+		int regno;
+		for(regno = HIP_LAST_SAVED_REGISTER; regno >= 0; --regno)
 		{
-			if(
-				!fixed_regs[regno] &&
-				!call_used_regs[regno] &&
-				df_regs_ever_live_p(regno)
-			)
+			if(hip_used_register(regno))
 			{
 				hip_pop_register(regno);
 			}
 		}
 	}
+
+	emit_move_insn(stack_pointer_rtx, hard_frame_pointer_rtx);
+	hip_pop_register(HIP_FP);
+	hip_pop_register(HIP_RA);
 
 	emit_jump_insn(gen_returner());
 }
@@ -463,14 +469,18 @@ hip_initial_elimination_offset(int from, int to)
 
 	if((from) == FRAME_POINTER_REGNUM && (to) == HARD_FRAME_POINTER_REGNUM)
 	{
-		/* Compute this since we need to use cfun->machine->local_vars_size.  */
-		hip_compute_frame ();
-		ret = -cfun->machine->callee_saved_reg_size;
+		/* Local variables */
+		ret = 4;
 	}
 	else if((from) == ARG_POINTER_REGNUM && (to) == HARD_FRAME_POINTER_REGNUM)
-		ret = 0x00;
+	{
+		/* Parameters */
+		ret = 0;
+	}
 	else
+	{
 		abort();
+	}
 
 	return ret;
 }
@@ -488,7 +498,7 @@ hip_setup_incoming_varargs(
 	int regno;
 	int regs = 8 - *cum;
 
-	*pretend_size = regs < 0 ? 0 : GET_MODE_SIZE (SImode) * regs;
+	*pretend_size = regs < 0 ? 0 : GET_MODE_SIZE(SImode) * regs;
 
 	if(no_rtl)
 		return;
@@ -514,9 +524,12 @@ hip_setup_incoming_varargs(
 	NULL_RTX if there's no more space.
 */
 static rtx
-hip_function_arg(CUMULATIVE_ARGS *cum, enum machine_mode mode,
-			const_tree type ATTRIBUTE_UNUSED,
-			bool named ATTRIBUTE_UNUSED)
+hip_function_arg(
+	CUMULATIVE_ARGS *cum,
+	enum machine_mode mode,
+	const_tree type ATTRIBUTE_UNUSED,
+	bool named ATTRIBUTE_UNUSED
+)
 {
 	if(*cum <= HIP_P2)
 	{
@@ -555,7 +568,7 @@ hip_function_arg_advance(
 }
 
 /* Return non-zero if the function argument described by TYPE is to be
-	 passed by reference.  */
+	passed by reference.  */
 
 static bool
 hip_pass_by_reference(
@@ -569,42 +582,52 @@ hip_pass_by_reference(
 
 	if(type)
 	{
-		if(AGGREGATE_TYPE_P (type))
+		if(AGGREGATE_TYPE_P(type))
 			return true;
-		size = int_size_in_bytes (type);
+		size = int_size_in_bytes(type);
 	}
 	else
-		size = GET_MODE_SIZE (mode);
+	{
+		size = GET_MODE_SIZE(mode);
+	}
 
 	return size > UNITS_PER_WORD;
 }
 
 /* Some function arguments will only partially fit in the registers
-	 that hold arguments.  Given a new arg, return the number of bytes
-	 that fit in argument passing registers.  */
-
+	that hold arguments.  Given a new arg, return the number of bytes
+	that fit in argument passing registers.
+	TODO: Left over from Moxie.
+*/
 static int
 hip_arg_partial_bytes(
 	CUMULATIVE_ARGS *cum,
 	enum machine_mode mode,
-	tree type, bool named
+	tree type,
+	bool named
 )
 {
 	int bytes_left, size;
 
 	if(*cum >= 8)
-	return 0;
+	{
+		return 0;
+	}
 
-	if(hip_pass_by_reference (cum, mode, type, named))
+	if(hip_pass_by_reference(cum, mode, type, named))
+	{
 		size = 4;
+	}
 	else if(type)
 	{
-		if(AGGREGATE_TYPE_P (type))
+		if(AGGREGATE_TYPE_P(type))
 			return 0;
-		size = int_size_in_bytes (type);
+		size = int_size_in_bytes(type);
 	}
 	else
-		size = GET_MODE_SIZE (mode);
+	{
+		size = GET_MODE_SIZE(mode);
+	}
 
 	bytes_left = (4 * 6) - ((*cum - 2) * 4);
 
@@ -621,16 +644,22 @@ hip_static_chain(const_tree fndecl, bool incoming_p)
 {
 	rtx addr, mem;
 
-	if(!DECL_STATIC_CHAIN (fndecl))
+	if(!DECL_STATIC_CHAIN(fndecl))
+	{
 		return NULL;
+	}
 
 	if(incoming_p)
-		addr = plus_constant (arg_pointer_rtx, 2 * UNITS_PER_WORD);
+	{
+		addr = plus_constant(arg_pointer_rtx, 2 * UNITS_PER_WORD);
+	}
 	else
-		addr = plus_constant (stack_pointer_rtx, -UNITS_PER_WORD);
+	{
+		addr = plus_constant(stack_pointer_rtx, -UNITS_PER_WORD);
+	}
 
-	mem = gen_rtx_MEM (Pmode, addr);
-	MEM_NOTRAP_P (mem) = 1;
+	mem = gen_rtx_MEM(Pmode, addr);
+	MEM_NOTRAP_P(mem) = 1;
 
 	return mem;
 }
@@ -638,7 +667,7 @@ hip_static_chain(const_tree fndecl, bool incoming_p)
 /* Worker function for TARGET_ASM_TRAMPOLINE_TEMPLATE.  */
 
 static void
-hip_asm_trampoline_template (FILE *f)
+hip_asm_trampoline_template(FILE *f)
 {
 	fprintf(f, "\tpush  sp, r0\n");
 	fprintf(f, "\tldi.l r0, 0x0\n");
@@ -651,9 +680,9 @@ hip_asm_trampoline_template (FILE *f)
 /* Worker function for TARGET_TRAMPOLINE_INIT.  */
 
 static void
-hip_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
+hip_trampoline_init(rtx m_tramp, tree fndecl, rtx chain_value)
 {
-	rtx mem, fnaddr = XEXP(DECL_RTL (fndecl), 0);
+	rtx mem, fnaddr = XEXP(DECL_RTL(fndecl), 0);
 
 	emit_block_move(
 		m_tramp,
@@ -662,10 +691,10 @@ hip_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
 		BLOCK_OP_NORMAL
 	);
 
-	mem = adjust_address (m_tramp, SImode, 4);
-	emit_move_insn (mem, chain_value);
-	mem = adjust_address (m_tramp, SImode, 20);
-	emit_move_insn (mem, fnaddr);
+	mem = adjust_address(m_tramp, SImode, 4);
+	emit_move_insn(mem, chain_value);
+	mem = adjust_address(m_tramp, SImode, 20);
+	emit_move_insn(mem, fnaddr);
 }
 
 /* The Global `targetm' Variable.  */
@@ -696,8 +725,8 @@ hip_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
 
 
 /* Define this to return an RTX representing the place where a
-	 function returns or receives a value of data type RET_TYPE, a tree
-	 node node representing a data type.  */
+	function returns or receives a value of data type RET_TYPE, a tree
+	node node representing a data type.  */
 #undef	TARGET_FUNCTION_VALUE
 #define TARGET_FUNCTION_VALUE hip_function_value
 #undef	TARGET_LIBCALL_VALUE
